@@ -6,7 +6,7 @@ Initial, runnable version of the shell described in `PLAN.md`. It intentionally 
 
 - Matte status bar on `DP-1` only. `HDMI-A-1` has no panel.
 - EndeavourOS button: left click opens the launcher; right click shows the future-configurator notice.
-- Centered clock; CPU, RAM, NVIDIA GPU fallback, NetworkManager connection name, PipeWire volume, keyboard layout, and power placeholder on the right.
+- Clock beside the launcher icon; centered MPRIS music presence; CPU, RAM, NVIDIA GPU fallback, NetworkManager connection name, PipeWire volume, keyboard layout, and power placeholder on the right.
 - Bottom-sheet launcher, restricted to `DP-1`, opened over a dimmed primary display.
 - Launcher IPC, XDG desktop-entry index, text search, `Escape` close, arrow-key navigation, `Enter` execution, and actions for terminal, lock screen, and shell reload.
 - Central runtime configuration in `config/ShellConfig.qml`, monitor configuration in `config/MachineConfig.qml`, and semantic colors in `theme/Theme.qml`.

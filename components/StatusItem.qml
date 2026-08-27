@@ -20,8 +20,8 @@ Rectangle {
         id: content
         anchors.centerIn: parent
         spacing: 6
-        Text { text: root.icon; color: Theme.Theme.textMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14 }
-        Text { text: root.value; color: root.accentValue ? Theme.Theme.accent : Theme.Theme.textPrimary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.DemiBold }
+        Text { height: 30; text: root.icon; color: Theme.Theme.textMuted; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 14; verticalAlignment: Text.AlignVCenter }
+        Text { height: 30; text: root.value; color: root.accentValue ? Theme.Theme.accent : Theme.Theme.textPrimary; font.family: "JetBrainsMono Nerd Font"; font.pixelSize: 12; font.weight: Font.DemiBold; verticalAlignment: Text.AlignVCenter }
     }
 
     MouseArea {

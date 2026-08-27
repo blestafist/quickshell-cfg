@@ -16,11 +16,13 @@ Rectangle {
     color: mouseArea.containsMouse ? Theme.Theme.surfaceHover : "transparent"
 
     Text {
-        anchors.centerIn: parent
+        anchors.fill: parent
         text: root.icon
         color: Theme.Theme.textPrimary
         font.family: "JetBrainsMono Nerd Font"
         font.pixelSize: 17
+        horizontalAlignment: Text.AlignHCenter
+        verticalAlignment: Text.AlignVCenter
     }
 
     MouseArea {

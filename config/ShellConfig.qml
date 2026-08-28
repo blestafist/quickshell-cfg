@@ -8,7 +8,7 @@ QtObject {
     readonly property int launcherWidth: 900
     readonly property int launcherHeight: 580
     readonly property int launcherBottomMargin: 24
-    readonly property string clockFormat: "HH:mm"
+    readonly property string clockFormat: "dd MMM, yyyy - HH:mm:ss"
     readonly property bool animationsEnabled: true
 
     readonly property string terminalCommand: "kitty"

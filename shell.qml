@@ -19,6 +19,6 @@ ShellRoot {
         function openLauncher() { launcher.open() }
         function closeLauncher() { launcher.close() }
         function toggleLauncher() { launcher.toggle() }
-        function reload() { Quickshell.reload() }
+        function reload() { Quickshell.reload(false) }
     }
 }

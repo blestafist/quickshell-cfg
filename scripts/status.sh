@@ -18,9 +18,9 @@ case "${1:-}" in
             }
         ' /tmp/quickshell-cpu-before-$$ /proc/stat)
         rm -f /tmp/quickshell-cpu-before-$$
-        memory=$(awk '/MemTotal:/ { total = $2 } /MemAvailable:/ { available = $2 } END { printf "%d", (total - available) * 100 / total }' /proc/meminfo)
+        memory=$(awk '/MemTotal:/ { total = $2 } /MemAvailable:/ { available = $2 } END { printf "%d|%.1f GB", (total - available) * 100 / total, (total - available) / 1048576 }' /proc/meminfo)
         gpu=$(nvidia-smi --query-gpu=utilization.gpu --format=csv,noheader,nounits 2>/dev/null | head -n1 || true)
-        printf '%s|%s|%s\n' "${cpu:-0}" "${memory:-0}" "${gpu:-N/A}"
+        printf '%s|%s|%s\n' "${cpu:-0}" "${memory:-0|0.0 GB}" "${gpu:-N/A}"
         ;;
     network)
         wifi=$(nmcli -t -f IN-USE,SSID,SIGNAL dev wifi 2>/dev/null | awk -F: '$1 == "*" { printf "%s|%s", $2, $3; exit }')

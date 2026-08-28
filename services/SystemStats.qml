@@ -7,6 +7,7 @@ Item {
 
     property string cpu: "--"
     property string memory: "--"
+    property string memoryGigabytes: "-- GB"
     property string gpu: "N/A"
     property string volume: "--"
     property bool muted: false
@@ -27,10 +28,11 @@ Item {
         stdout: SplitParser {
             onRead: data => {
                 const values = data.trim().split("|")
-                if (values.length >= 3) {
+                if (values.length >= 4) {
                     root.cpu = values[0] + "%"
                     root.memory = values[1] + "%"
-                    root.gpu = values[2] === "" ? "N/A" : values[2] === "N/A" ? "N/A" : values[2] + "%"
+                    root.memoryGigabytes = values[2]
+                    root.gpu = values[3] === "" ? "N/A" : values[3] === "N/A" ? "N/A" : values[3] + "%"
                 }
             }
         }

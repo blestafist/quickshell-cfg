@@ -17,6 +17,7 @@ PanelWindow {
     property int barHeight: 42
     property int edgeRadius: 21
     property int islandRadius: 24
+    property bool showMemoryGigabytes: false
 
     screen: targetScreen
     visible: targetScreen !== null
@@ -52,7 +53,7 @@ PanelWindow {
             anchors.left: parent.left
             anchors.leftMargin: 10
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 12
+            spacing: 0
 
             Rectangle {
                 id: distro
@@ -95,10 +96,23 @@ PanelWindow {
             }
 
             Rectangle {
+                id: distroGap
+                width: 12
+                height: 1
+                color: "transparent"
+            }
+
+            Rectangle {
                 width: 1
                 height: 18
                 anchors.verticalCenter: parent.verticalCenter
                 color: Theme.Theme.surfaceHover
+            }
+
+            Rectangle {
+                width: distroGap.width + Math.abs(distro.iconOffsetX)
+                height: 1
+                color: "transparent"
             }
 
             Text {
@@ -106,7 +120,7 @@ PanelWindow {
                 text: Qt.formatDateTime(root.currentTime, Config.ShellConfig.clockFormat)
                 color: Theme.Theme.textPrimary
                 font.family: "JetBrainsMono Nerd Font"
-                font.pixelSize: 12
+                font.pixelSize: 13
                 font.weight: Font.DemiBold
                 verticalAlignment: Text.AlignVCenter
             }
@@ -116,9 +130,13 @@ PanelWindow {
 
     Item {
         id: musicIsland
+        property real clickScale: 1
+        property real naturalWidth: root.stats.music === "" ? 0 : Math.min(560, musicContent.implicitWidth + 68)
+        property color backgroundColor: musicMouse.containsMouse ? Theme.Theme.surfaceHover : Theme.Theme.surfaceRaised
+
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        width: root.stats.music === "" ? 0 : Math.min(560, musicContent.implicitWidth + 68)
+        width: naturalWidth * clickScale
         height: root.barHeight
         opacity: root.stats.music === "" ? 0 : 1
         visible: width > 0
@@ -129,7 +147,7 @@ PanelWindow {
             antialiasing: true
 
             ShapePath {
-                fillColor: musicMouse.containsMouse ? Theme.Theme.surfaceHover : Theme.Theme.surfaceRaised
+                fillColor: musicIsland.backgroundColor
                 strokeColor: "transparent"
                 strokeWidth: 0
                 startX: 0
@@ -158,8 +176,13 @@ PanelWindow {
         }
 
         Behavior on width {
-            enabled: Config.ShellConfig.animationsEnabled
+            enabled: Config.ShellConfig.animationsEnabled && !musicClickAnimation.running
             NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+        }
+
+        Behavior on backgroundColor {
+            enabled: Config.ShellConfig.animationsEnabled
+            ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
         }
 
         Behavior on opacity {
@@ -218,7 +241,19 @@ PanelWindow {
             id: musicMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: musicToggle.running = true
+            onClicked: {
+                musicToggle.running = true
+                if (Config.ShellConfig.animationsEnabled)
+                    musicClickAnimation.restart()
+            }
+        }
+
+        SequentialAnimation {
+            id: musicClickAnimation
+
+            NumberAnimation { target: musicIsland; property: "clickScale"; to: 0.97; duration: 120; easing.type: Easing.OutCubic }
+            NumberAnimation { target: musicIsland; property: "clickScale"; to: 1.03; duration: 200; easing.type: Easing.OutBack }
+            NumberAnimation { target: musicIsland; property: "clickScale"; to: 1; duration: 250; easing.type: Easing.InOutCubic }
         }
     }
 
@@ -251,11 +286,16 @@ PanelWindow {
             spacing: 5
 
             Components.StatusItem { icon: "󰍛"; value: root.stats.cpu; accessibleName: "CPU usage" }
-            Components.StatusItem { icon: "󰘚"; value: root.stats.memory; accessibleName: "Memory usage" }
+            Components.StatusItem {
+                icon: "󰘚"
+                value: root.showMemoryGigabytes ? root.stats.memoryGigabytes : root.stats.memory
+                accessibleName: "Memory usage"
+                onClicked: root.showMemoryGigabytes = !root.showMemoryGigabytes
+            }
             Rectangle { width: 1; height: 18; color: Theme.Theme.surfaceHover; anchors.verticalCenter: parent.verticalCenter }
             Components.StatusItem { icon: root.stats.network === "Offline" ? "󰤭" : "󰤨"; value: root.stats.network; accessibleName: "Network"; onClicked: networkSettings.running = true }
             Components.StatusItem { icon: root.stats.muted ? "󰝟" : "󰕾"; value: root.stats.muted ? "Muted" : root.stats.volume; accessibleName: "Audio volume"; onClicked: volumeToggle.running = true }
-            Components.StatusItem { icon: "󰌌"; value: root.stats.keyboardLayout; accessibleName: "Keyboard layout"; accentValue: true; onClicked: layoutSwitch.running = true }
+            Components.StatusItem { icon: "󰌌"; value: root.stats.keyboardLayout; accessibleName: "Keyboard layout"; onClicked: layoutSwitch.running = true }
             Components.IconButton { icon: "⏻"; onClicked: root.launcher.showMessage("Power menu is planned for a later release") }
         }
     }

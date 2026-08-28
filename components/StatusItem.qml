@@ -1,5 +1,6 @@
 import QtQuick
 
+import "../config" as Config
 import "../theme" as Theme
 
 Rectangle {
@@ -15,6 +16,21 @@ Rectangle {
     implicitHeight: 30
     radius: Theme.Theme.radiusSmall
     color: mouse.containsMouse ? Theme.Theme.surfaceHover : "transparent"
+    clip: true
+
+    Behavior on implicitWidth {
+        enabled: Config.ShellConfig.animationsEnabled
+        SpringAnimation {
+            spring: 2.2
+            damping: 0.4
+            epsilon: 0.2
+        }
+    }
+
+    Behavior on color {
+        enabled: Config.ShellConfig.animationsEnabled
+        ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
+    }
 
     Row {
         id: content

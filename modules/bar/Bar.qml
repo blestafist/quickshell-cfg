@@ -299,6 +299,12 @@ PanelWindow {
 
     Item {
         id: rightCluster
+
+        // Properties
+        property real powerButtonIconOffsetX: -6
+        property real powerButtonIconOffsetY: 0
+
+
         anchors.right: parent.right
         anchors.top: parent.top
         width: rightContent.width + 20
@@ -329,7 +335,7 @@ PanelWindow {
             anchors.right: parent.right
             anchors.rightMargin: 7
             anchors.verticalCenter: parent.verticalCenter
-            spacing: 5
+            spacing: 8
 
             Components.StatusItem { icon: "󰍛"; value: root.stats.cpu; accessibleName: "CPU usage" }
             Components.StatusItem {
@@ -353,7 +359,15 @@ PanelWindow {
                 }
             }
             Components.StatusItem { icon: "󰌌"; value: root.stats.keyboardLayout; accessibleName: "Keyboard layout"; onClicked: layoutSwitch.running = true }
-            Components.IconButton { icon: "⏻"; onClicked: root.launcher.showMessage("Power menu is planned for a later release") }
+            Components.IconButton {
+                transform: Translate {
+                    x: rightCluster.powerButtonIconOffsetX
+                    y: rightCluster.powerButtonIconOffsetY
+                }
+
+                icon: "⏻";
+                onClicked: root.launcher.showMessage("Power menu is planned for a later release")
+            }
         }
     }
 

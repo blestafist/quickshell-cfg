@@ -110,10 +110,10 @@ PanelWindow {
         id: sheet
 
         readonly property int padding: 12
-        readonly property int frameInset: 18
+        readonly property int frameInset: 16
         readonly property int frameFlare: frameInset - 16
         readonly property int frameTopRadius: Theme.Theme.radiusLarge + frameInset - frameFlare
-        readonly property int rowHeight: 64
+        readonly property int rowHeight: 72
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 7)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
 
@@ -131,7 +131,7 @@ PanelWindow {
             Behavior on y {
                 enabled: Config.ShellConfig.animationsEnabled
                 NumberAnimation {
-                    duration: 360
+                    duration: 480
                     easing.type: Easing.BezierSpline
                     easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
                 }
@@ -177,7 +177,7 @@ PanelWindow {
                 const context = getContext("2d")
                 const flare = sheet.frameFlare
                 const radius = sheet.frameTopRadius
-                const frameColor = Qt.darker(Theme.Theme.surface, 1.08)
+                const frameColor = Qt.darker(Theme.Theme.surface, 1.50)
                 context.reset()
                 context.beginPath()
                 context.moveTo(flare + radius, 0)

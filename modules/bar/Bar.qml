@@ -124,7 +124,10 @@ PanelWindow {
 
             Item {
                 id: clockButton
-                width: clockText.implicitWidth + 12
+
+                property real hoverOffset: 48
+
+                width: clockText.implicitWidth + hoverOffset
                 height: 34
                 anchors.verticalCenter: parent.verticalCenter
 
@@ -298,7 +301,7 @@ PanelWindow {
         id: rightCluster
         anchors.right: parent.right
         anchors.top: parent.top
-        width: rightContent.width + 14
+        width: rightContent.width + 20
         height: root.barHeight
 
         Behavior on width {

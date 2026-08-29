@@ -28,7 +28,11 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     exclusiveZone: 0
     color: "transparent"
-    focusable: true
+    focusable: opened
+    mask: Region {
+        width: root.opened ? root.width : 0
+        height: root.opened ? root.height : 0
+    }
 
     function open(clearMessage = true) {
         closeTimer.stop()
@@ -90,7 +94,7 @@ PanelWindow {
             commandRunner.command = ["gio", "launch", item.desktopFile]
         else
             commandRunner.command = ["sh", "-c", item.command]
-        commandRunner.running = true
+        commandRunner.startDetached()
         close()
     }
 
@@ -108,20 +112,33 @@ PanelWindow {
         readonly property int padding: 12
         readonly property int frameInset: 18
         readonly property int frameFlare: frameInset - 16
+        readonly property int frameTopRadius: Theme.Theme.radiusLarge + frameInset - frameFlare
         readonly property int rowHeight: 64
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 7)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
-        property real offsetScale: root.opened ? 0 : 1
 
         z: 1
         width: Math.min(Config.ShellConfig.launcherWidth + frameInset * 2, parent.width - 24)
         height: Math.min(Config.ShellConfig.launcherHeight, listHeight + 76)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin - (height + Config.ShellConfig.launcherBottomMargin + 5) * offsetScale
-        opacity: 1 - offsetScale
+        anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
+        opacity: root.opened ? 1 : 0
 
-        Behavior on offsetScale {
+        transform: Translate {
+            y: root.opened ? 0 : sheet.height + Config.ShellConfig.launcherBottomMargin + 5
+
+            Behavior on y {
+                enabled: Config.ShellConfig.animationsEnabled
+                NumberAnimation {
+                    duration: 360
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                }
+            }
+        }
+
+        Behavior on opacity {
             enabled: Config.ShellConfig.animationsEnabled
             NumberAnimation {
                 duration: 360
@@ -159,7 +176,8 @@ PanelWindow {
             onPaint: {
                 const context = getContext("2d")
                 const flare = sheet.frameFlare
-                const radius = Theme.Theme.radiusLarge
+                const radius = sheet.frameTopRadius
+                const frameColor = Qt.darker(Theme.Theme.surface, 1.08)
                 context.reset()
                 context.beginPath()
                 context.moveTo(flare + radius, 0)
@@ -172,9 +190,9 @@ PanelWindow {
                 context.lineTo(flare, radius)
                 context.quadraticCurveTo(flare, 0, flare + radius, 0)
                 context.closePath()
-                context.fillStyle = Theme.Theme.surface
+                context.fillStyle = frameColor
                 context.fill()
-                context.strokeStyle = Qt.darker(Theme.Theme.surface, 1.2)
+                context.strokeStyle = Qt.darker(frameColor, 1.2)
                 context.lineWidth = 1
                 context.stroke()
             }
@@ -422,6 +440,7 @@ PanelWindow {
     MouseArea {
         anchors.fill: parent
         z: 0
+        enabled: root.opened
         onClicked: root.close()
     }
 

@@ -18,6 +18,7 @@ PanelWindow {
     property int edgeRadius: 21
     property int islandRadius: 24
     property bool showMemoryGigabytes: false
+    property bool showFullDate: false
 
     screen: targetScreen
     visible: targetScreen !== null
@@ -33,6 +34,12 @@ PanelWindow {
         anchors.top: parent.top
         width: leftContent.width + root.edgeRadius + 18
         height: root.barHeight
+
+        Behavior on width {
+            enabled: Config.ShellConfig.animationsEnabled
+            NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+        }
+
         Shape {
             anchors.fill: parent
             antialiasing: false
@@ -115,14 +122,40 @@ PanelWindow {
                 color: "transparent"
             }
 
-            Text {
-                height: root.barHeight
-                text: Qt.formatDateTime(root.currentTime, Config.ShellConfig.clockFormat)
-                color: Theme.Theme.textPrimary
-                font.family: "JetBrainsMono Nerd Font"
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
-                verticalAlignment: Text.AlignVCenter
+            Item {
+                id: clockButton
+                width: clockText.implicitWidth + 12
+                height: 34
+                anchors.verticalCenter: parent.verticalCenter
+
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.Theme.radiusSmall
+                    color: clockMouse.containsMouse ? Theme.Theme.surfaceHover : "transparent"
+
+                    Behavior on color {
+                        enabled: Config.ShellConfig.animationsEnabled
+                        ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
+                    }
+                }
+
+                Text {
+                    id: clockText
+                    anchors.centerIn: parent
+                    text: Qt.formatDateTime(root.currentTime, root.showFullDate ? Config.ShellConfig.fullClockFormat : Config.ShellConfig.clockFormat)
+                    color: Theme.Theme.textPrimary
+                    font.family: "JetBrainsMono Nerd Font"
+                    font.pixelSize: 13
+                    font.weight: Font.DemiBold
+                    verticalAlignment: Text.AlignVCenter
+                }
+
+                MouseArea {
+                    id: clockMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onClicked: root.showFullDate = !root.showFullDate
+                }
             }
         }
 
@@ -241,8 +274,12 @@ PanelWindow {
             id: musicMouse
             anchors.fill: parent
             hoverEnabled: true
-            onClicked: {
-                musicToggle.running = true
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: mouse => {
+                if (mouse.button === Qt.RightButton)
+                    musicNext.running = true
+                else
+                    musicToggle.running = true
                 if (Config.ShellConfig.animationsEnabled)
                     musicClickAnimation.restart()
             }
@@ -263,6 +300,12 @@ PanelWindow {
         anchors.top: parent.top
         width: rightContent.width + 14
         height: root.barHeight
+
+        Behavior on width {
+            enabled: Config.ShellConfig.animationsEnabled
+            NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+        }
+
         Shape {
             anchors.fill: parent
             antialiasing: false
@@ -294,7 +337,18 @@ PanelWindow {
             }
             Rectangle { width: 1; height: 18; color: Theme.Theme.surfaceHover; anchors.verticalCenter: parent.verticalCenter }
             Components.StatusItem { icon: root.stats.network === "Offline" ? "󰤭" : "󰤨"; value: root.stats.network; accessibleName: "Network"; onClicked: networkSettings.running = true }
-            Components.StatusItem { icon: root.stats.muted ? "󰝟" : "󰕾"; value: root.stats.muted ? "Muted" : root.stats.volume; accessibleName: "Audio volume"; onClicked: volumeToggle.running = true }
+            Components.StatusItem {
+                icon: root.stats.muted ? "󰝟" : "󰕾"
+                value: root.stats.muted ? "Muted" : root.stats.volume
+                accessibleName: "Audio volume"
+                onClicked: volumeToggle.running = true
+                onWheelScrolled: delta => {
+                    if (delta > 0)
+                        volumeUp.running = true
+                    else if (delta < 0)
+                        volumeDown.running = true
+                }
+            }
             Components.StatusItem { icon: "󰌌"; value: root.stats.keyboardLayout; accessibleName: "Keyboard layout"; onClicked: layoutSwitch.running = true }
             Components.IconButton { icon: "⏻"; onClicked: root.launcher.showMessage("Power menu is planned for a later release") }
         }
@@ -302,7 +356,10 @@ PanelWindow {
 
     Process { id: networkSettings; command: ["sh", "-c", Config.ShellConfig.networkSettingsCommand] }
     Process { id: volumeToggle; command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"] }
+    Process { id: volumeUp; command: ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"] }
+    Process { id: volumeDown; command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"] }
     Process { id: musicToggle; command: ["playerctl", "play-pause"] }
+    Process { id: musicNext; command: ["playerctl", "next"] }
     Process { id: layoutSwitch; command: ["hyprctl", "switchxkblayout", "current", "next"] }
     Timer { interval: 1000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.currentTime = new Date() }
 }

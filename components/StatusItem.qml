@@ -11,6 +11,7 @@ Rectangle {
     property string accessibleName: ""
     property bool accentValue: false
     signal clicked()
+    signal wheelScrolled(int delta)
 
     implicitWidth: content.width + 20
     implicitHeight: 30
@@ -45,5 +46,6 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         onClicked: root.clicked()
+        onWheel: wheel => root.wheelScrolled(wheel.angleDelta.y)
     }
 }

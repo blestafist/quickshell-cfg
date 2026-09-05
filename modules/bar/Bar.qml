@@ -16,6 +16,7 @@ PanelWindow {
     property date currentTime: new Date()
     property int barHeight: 42
     property int edgeRadius: 21
+    property int joinRadius: 12
     property int islandRadius: 24
     property bool showMemoryGigabytes: false
     property bool showFullDate: false
@@ -41,14 +42,21 @@ PanelWindow {
         }
 
         Shape {
-            anchors.fill: parent
-            antialiasing: false
+            width: parent.width + root.joinRadius
+            height: parent.height
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: true
             ShapePath {
                 fillColor: Theme.Theme.surface
                 strokeColor: "transparent"
                 strokeWidth: 0
                 startX: 0; startY: 0
-                PathLine { x: leftCluster.width; y: 0 }
+                PathLine { x: leftCluster.width + root.joinRadius; y: 0 }
+                PathCubic {
+                    x: leftCluster.width; y: root.joinRadius
+                    control1X: leftCluster.width + root.joinRadius * 0.448; control1Y: 0
+                    control2X: leftCluster.width; control2Y: root.joinRadius * 0.448
+                }
                 PathLine { x: leftCluster.width; y: leftCluster.height - root.edgeRadius }
                 PathQuad { x: leftCluster.width - root.edgeRadius; y: leftCluster.height; controlX: leftCluster.width; controlY: leftCluster.height }
                 PathLine { x: 0; y: leftCluster.height }
@@ -167,7 +175,9 @@ PanelWindow {
     Item {
         id: musicIsland
         property real clickScale: 1
-        property real naturalWidth: root.stats.music === "" ? 0 : Math.min(560, musicContent.implicitWidth + 68)
+        property real naturalWidth: root.stats.music === "" ? 0 : Math.min(560, musicContent.implicitWidth + 68) + root.joinRadius * 2
+        property real joinRadius: Math.min(root.joinRadius, width / 4)
+        property real bottomRadius: Math.min(root.islandRadius, Math.max(0, width / 2 - joinRadius))
         property color backgroundColor: musicMouse.containsMouse ? Theme.Theme.surfaceHover : Theme.Theme.surfaceRaised
 
         anchors.horizontalCenter: parent.horizontalCenter
@@ -180,6 +190,7 @@ PanelWindow {
 
         Shape {
             anchors.fill: parent
+            preferredRendererType: Shape.CurveRenderer
             antialiasing: true
 
             ShapePath {
@@ -189,25 +200,35 @@ PanelWindow {
                 startX: 0
                 startY: 0
                 PathLine { x: musicIsland.width; y: 0 }
-                PathLine { x: musicIsland.width; y: musicIsland.height - root.islandRadius }
                 PathCubic {
-                    x: musicIsland.width - root.islandRadius
+                    x: musicIsland.width - musicIsland.joinRadius; y: musicIsland.joinRadius
+                    control1X: musicIsland.width - musicIsland.joinRadius * 0.552; control1Y: 0
+                    control2X: musicIsland.width - musicIsland.joinRadius; control2Y: musicIsland.joinRadius * 0.448
+                }
+                PathLine { x: musicIsland.width - musicIsland.joinRadius; y: musicIsland.height - musicIsland.bottomRadius }
+                PathCubic {
+                    x: musicIsland.width - musicIsland.joinRadius - musicIsland.bottomRadius
                     y: musicIsland.height
-                    control1X: musicIsland.width
-                    control1Y: musicIsland.height - root.islandRadius * 0.448
-                    control2X: musicIsland.width - root.islandRadius * 0.448
+                    control1X: musicIsland.width - musicIsland.joinRadius
+                    control1Y: musicIsland.height - musicIsland.bottomRadius * 0.448
+                    control2X: musicIsland.width - musicIsland.joinRadius - musicIsland.bottomRadius * 0.448
                     control2Y: musicIsland.height
                 }
-                PathLine { x: root.islandRadius; y: musicIsland.height }
+                PathLine { x: musicIsland.joinRadius + musicIsland.bottomRadius; y: musicIsland.height }
                 PathCubic {
-                    x: 0
-                    y: musicIsland.height - root.islandRadius
-                    control1X: root.islandRadius * 0.448
+                    x: musicIsland.joinRadius
+                    y: musicIsland.height - musicIsland.bottomRadius
+                    control1X: musicIsland.joinRadius + musicIsland.bottomRadius * 0.448
                     control1Y: musicIsland.height
-                    control2X: 0
-                    control2Y: musicIsland.height - root.islandRadius * 0.448
+                    control2X: musicIsland.joinRadius
+                    control2Y: musicIsland.height - musicIsland.bottomRadius * 0.448
                 }
-                PathLine { x: 0; y: 0 }
+                PathLine { x: musicIsland.joinRadius; y: musicIsland.joinRadius }
+                PathCubic {
+                    x: 0; y: 0
+                    control1X: musicIsland.joinRadius; control1Y: musicIsland.joinRadius * 0.448
+                    control2X: musicIsland.joinRadius * 0.552; control2Y: 0
+                }
             }
         }
 
@@ -316,17 +337,26 @@ PanelWindow {
         }
 
         Shape {
-            anchors.fill: parent
-            antialiasing: false
+            x: -root.joinRadius
+            width: parent.width + root.joinRadius
+            height: parent.height
+            preferredRendererType: Shape.CurveRenderer
+            antialiasing: true
             ShapePath {
                 fillColor: Theme.Theme.surface
                 strokeColor: "transparent"
                 strokeWidth: 0
                 startX: 0; startY: 0
-                PathLine { x: rightCluster.width; y: 0 }
-                PathLine { x: rightCluster.width; y: rightCluster.height }
-                PathLine { x: root.edgeRadius; y: rightCluster.height }
-                PathQuad { x: 0; y: rightCluster.height - root.edgeRadius; controlX: 0; controlY: rightCluster.height }
+                PathLine { x: rightCluster.width + root.joinRadius; y: 0 }
+                PathLine { x: rightCluster.width + root.joinRadius; y: rightCluster.height }
+                PathLine { x: root.joinRadius + root.edgeRadius; y: rightCluster.height }
+                PathQuad { x: root.joinRadius; y: rightCluster.height - root.edgeRadius; controlX: root.joinRadius; controlY: rightCluster.height }
+                PathLine { x: root.joinRadius; y: root.joinRadius }
+                PathCubic {
+                    x: 0; y: 0
+                    control1X: root.joinRadius; control1Y: root.joinRadius * 0.448
+                    control2X: root.joinRadius * 0.552; control2Y: 0
+                }
             }
         }
 

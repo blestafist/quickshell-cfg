@@ -16,7 +16,7 @@ PanelWindow {
     property date currentTime: new Date()
     property int barHeight: 42
     property int edgeRadius: 21
-    property int joinRadius: 10
+    property int joinRadius: 12
     property int islandRadius: 24
     property bool showMemoryGigabytes: false
     property bool showFullDate: false

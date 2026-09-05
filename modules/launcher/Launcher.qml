@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 
@@ -12,7 +11,7 @@ PanelWindow {
     id: root
 
     property bool opened: false
-    readonly property bool presented: opened || revealAnimation.running
+    property bool presented: false
     property string message: ""
     property int selectedIndex: 0
     property var applications: []
@@ -23,10 +22,9 @@ PanelWindow {
     ]
     property var results: []
 
-    property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor) ?? null
+    property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     screen: targetScreen
-    // Keep the transparent surface mapped to avoid compositor animations on every toggle.
-    visible: targetScreen !== null
+    visible: presented && targetScreen !== null
     anchors { top: true; bottom: true; left: true; right: true }
     exclusiveZone: 0
     color: "transparent"
@@ -37,25 +35,21 @@ PanelWindow {
     }
 
     function open(clearMessage = true) {
-        if (opened && clearMessage && message === "") {
-            search.forceActiveFocus()
-            return
-        }
+        closeTimer.stop()
         if (clearMessage)
             message = ""
-        if (search.text === "")
-            filterResults("")
-        else
-            search.text = ""
-        opened = true
+        search.text = ""
+        filterResults("")
+        presented = true
         Qt.callLater(() => {
-            if (opened)
-                search.forceActiveFocus()
+            opened = true
+            search.forceActiveFocus()
         })
     }
 
     function close() {
         opened = false
+        closeTimer.restart()
     }
 
     function toggle() { opened ? close() : open() }
@@ -78,11 +72,6 @@ PanelWindow {
     }
 
     function filterResults(query) {
-        if (message !== "") {
-            results = []
-            selectedIndex = 0
-            return
-        }
         const needle = normalized(query).trim()
         const scored = applications.concat(commands).map(item => ({ item: item, score: score(item, needle) })).filter(entry => entry.score >= 0)
         scored.sort((first, second) => second.score - first.score || first.item.name.localeCompare(second.item.name))
@@ -111,90 +100,113 @@ PanelWindow {
 
     Process { id: commandRunner }
 
+    Timer {
+        id: closeTimer
+        interval: Config.ShellConfig.animationsEnabled ? 360 : 0
+        onTriggered: root.presented = false
+    }
+
     Item {
         id: sheet
 
-        readonly property int padding: 16
-        readonly property int frameInset: 28
-        readonly property int rowHeight: 64
-        readonly property int topRadius: 28
+        readonly property int padding: 12
+        readonly property int frameInset: 16
+        readonly property int frameFlare: frameInset - 16
+        readonly property int frameTopRadius: Theme.Theme.radiusLarge + frameInset - frameFlare
+        readonly property int rowHeight: 72
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 7)
-        readonly property real naturalHeight: Math.min(Config.ShellConfig.launcherHeight, (root.screen ? root.screen.height : 1080) - 70, visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2 + 86)
+        readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
 
         z: 1
         width: Math.min(Config.ShellConfig.launcherWidth + frameInset * 2, parent.width - 24)
-        height: naturalHeight
+        height: Math.min(Config.ShellConfig.launcherHeight, listHeight + 76)
         anchors.horizontalCenter: parent.horizontalCenter
-        y: root.opened ? root.height - height : root.height + 2
-        visible: root.presented
-        clip: true
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
+        opacity: root.opened ? 1 : 0
 
-        Behavior on y {
+        transform: Translate {
+            y: root.opened ? 0 : sheet.height + Config.ShellConfig.launcherBottomMargin + 5
+
+            Behavior on y {
+                enabled: Config.ShellConfig.animationsEnabled
+                NumberAnimation {
+                    duration: 480
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                }
+            }
+        }
+
+        Behavior on opacity {
             enabled: Config.ShellConfig.animationsEnabled
-            YAnimator {
-                id: revealAnimation
-                duration: root.opened ? 460 : 320
+            NumberAnimation {
+                duration: 360
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: root.opened
-                    ? [0.24, 0.12, 0.24, 1.08, 1, 1]
-                    : [0.4, 0, 0.65, 1, 1, 1]
+                easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
             }
         }
 
         Behavior on height {
-            enabled: Config.ShellConfig.animationsEnabled && root.opened
+            enabled: Config.ShellConfig.animationsEnabled
             NumberAnimation {
-                duration: 320
+                duration: 280
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.22, 0, 0.28, 1, 1, 1]
+                easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
             }
         }
 
-        MouseArea { anchors.fill: parent }
+        Canvas {
+            id: outerFrame
+            x: 0
+            y: -sheet.frameInset
+            width: parent.width
+            height: parent.height + Config.ShellConfig.launcherBottomMargin + sheet.frameInset
+            z: -1
 
-        Shape {
-            anchors.fill: parent
-            preferredRendererType: Shape.CurveRenderer
-            antialiasing: true
-            ShapePath {
-                fillColor: Theme.Theme.surface
-                strokeWidth: 0
-                startX: sheet.frameInset + sheet.topRadius; startY: 0
-                PathLine { x: sheet.width - sheet.frameInset - sheet.topRadius; y: 0 }
-                PathCubic {
-                    x: sheet.width - sheet.frameInset; y: sheet.topRadius
-                    control1X: sheet.width - sheet.frameInset - sheet.topRadius * 0.448; control1Y: 0
-                    control2X: sheet.width - sheet.frameInset; control2Y: sheet.topRadius * 0.448
-                }
-                PathLine { x: sheet.width - sheet.frameInset; y: sheet.height - sheet.frameInset }
-                PathCubic {
-                    x: sheet.width; y: sheet.height
-                    control1X: sheet.width - sheet.frameInset; control1Y: sheet.height - sheet.frameInset * 0.448
-                    control2X: sheet.width - sheet.frameInset * 0.448; control2Y: sheet.height
-                }
-                PathLine { x: 0; y: sheet.height }
-                PathCubic {
-                    x: sheet.frameInset; y: sheet.height - sheet.frameInset
-                    control1X: sheet.frameInset * 0.448; control1Y: sheet.height
-                    control2X: sheet.frameInset; control2Y: sheet.height - sheet.frameInset * 0.448
-                }
-                PathLine { x: sheet.frameInset; y: sheet.topRadius }
-                PathCubic {
-                    x: sheet.frameInset + sheet.topRadius; y: 0
-                    control1X: sheet.frameInset; control1Y: sheet.topRadius * 0.448
-                    control2X: sheet.frameInset + sheet.topRadius * 0.448; control2Y: 0
-                }
+            onWidthChanged: requestPaint()
+            onHeightChanged: requestPaint()
+            Component.onCompleted: requestPaint()
+
+            Connections {
+                target: Theme.Theme
+                function onSurfaceChanged() { outerFrame.requestPaint() }
+            }
+
+            onPaint: {
+                const context = getContext("2d")
+                const flare = sheet.frameFlare
+                const radius = sheet.frameTopRadius
+                const frameColor = Qt.darker(Theme.Theme.surface, 1.50)
+                context.reset()
+                context.beginPath()
+                context.moveTo(flare + radius, 0)
+                context.lineTo(width - flare - radius, 0)
+                context.quadraticCurveTo(width - flare, 0, width - flare, radius)
+                context.lineTo(width - flare, height - flare)
+                context.bezierCurveTo(width - flare, height - 10, width - 10, height, width, height)
+                context.lineTo(0, height)
+                context.bezierCurveTo(10, height, flare, height - 10, flare, height - flare)
+                context.lineTo(flare, radius)
+                context.quadraticCurveTo(flare, 0, flare + radius, 0)
+                context.closePath()
+                context.fillStyle = frameColor
+                context.fill()
+                context.strokeStyle = Qt.darker(frameColor, 1.2)
+                context.lineWidth = 1
+                context.stroke()
             }
         }
 
         Rectangle {
             id: listSurface
-            anchors { top: parent.top; left: parent.left; right: parent.right }
-            height: Math.max(0, sheet.height - 86)
+            anchors { top: parent.top; left: parent.left; right: parent.right; bottom: search.top; bottomMargin: 12 }
             anchors.leftMargin: sheet.frameInset
             anchors.rightMargin: sheet.frameInset
-            color: "transparent"
+            color: Theme.Theme.surface
             radius: Theme.Theme.radiusLarge
+            border.width: 1
+            border.color: Qt.darker(Theme.Theme.surface, 1.2)
 
             ListView {
                 id: resultList
@@ -204,8 +216,6 @@ PanelWindow {
                 model: root.results
                 currentIndex: root.selectedIndex
                 spacing: 6
-                reuseItems: true
-                cacheBuffer: sheet.rowHeight * 2
                 boundsBehavior: Flickable.StopAtBounds
                 preferredHighlightBegin: 0
                 preferredHighlightEnd: height
@@ -217,19 +227,48 @@ PanelWindow {
                     height: sheet.rowHeight
                     radius: Theme.Theme.radiusMedium
                     color: Theme.Theme.surfaceHover
-                    visible: resultList.count > 0
                     y: resultList.currentItem ? resultList.currentItem.y : 0
 
                     Behavior on y {
                         enabled: Config.ShellConfig.animationsEnabled
                         NumberAnimation {
-                            duration: 140
-                            easing.type: Easing.OutCubic
+                            duration: 220
+                            easing.type: Easing.BezierSpline
+                            easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1]
                         }
                     }
                 }
 
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                add: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        from: 0
+                        to: 1
+                        duration: 200
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: [0.34, 0.8, 0.34, 1, 1, 1]
+                    }
+                }
+
+                remove: Transition {
+                    NumberAnimation {
+                        property: "opacity"
+                        from: 1
+                        to: 0
+                        duration: 200
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: [0.34, 0.8, 0.34, 1, 1, 1]
+                    }
+                }
+
+                displaced: Transition {
+                    NumberAnimation {
+                        property: "y"
+                        duration: 500
+                        easing.type: Easing.BezierSpline
+                        easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                    }
+                }
 
                 delegate: Rectangle {
                     id: resultDelegate
@@ -240,9 +279,6 @@ PanelWindow {
                     height: sheet.rowHeight
                     radius: Theme.Theme.radiusMedium
                     color: delegateMouse.containsMouse && index !== root.selectedIndex ? Theme.Theme.surfaceRaised : "transparent"
-                    Accessible.role: Accessible.Button
-                    Accessible.name: modelData.name
-                    Accessible.onPressAction: root.activate(modelData)
 
                     Behavior on color {
                         enabled: Config.ShellConfig.animationsEnabled
@@ -312,7 +348,7 @@ PanelWindow {
                                 Layout.fillWidth: true
                                 text: modelData.description || ""
                                 visible: text !== ""
-                                color: Theme.Theme.textSecondary
+                                color: Theme.Theme.textMuted
                                 font.pixelSize: 12
                                 elide: Text.ElideRight
                                 maximumLineCount: 1
@@ -324,17 +360,14 @@ PanelWindow {
                         id: delegateMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onPositionChanged: root.selectedIndex = index
+                        onEntered: root.selectedIndex = index
                         onClicked: root.activate(modelData)
                     }
                 }
 
-            }
-
-                Text {
-                    anchors.centerIn: parent
+                footer: Text {
                     width: resultList.width
+                    height: resultList.height
                     visible: resultList.count === 0
                     text: root.message !== "" ? root.message : "No results"
                     color: root.message !== "" ? Theme.Theme.accent : Theme.Theme.textMuted
@@ -342,30 +375,25 @@ PanelWindow {
                     verticalAlignment: Text.AlignVCenter
                     topPadding: 0
                     font.pixelSize: 14
-                    wrapMode: Text.WordWrap
                 }
+            }
         }
 
         TextField {
             id: search
-            height: 58
-            anchors { left: parent.left; right: parent.right; bottom: parent.bottom; bottomMargin: 16 }
-            anchors.leftMargin: sheet.frameInset + sheet.padding
-            anchors.rightMargin: sheet.frameInset + sheet.padding
-            placeholderText: "Search"
+            height: 64
+            anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
+            anchors.leftMargin: sheet.frameInset
+            anchors.rightMargin: sheet.frameInset
+            placeholderText: "Search applications and commands"
             color: Theme.Theme.textPrimary
             placeholderTextColor: Theme.Theme.textMuted
             font.family: "JetBrainsMono Nerd Font"
-            font.pixelSize: 14
-            Accessible.name: "Search applications and commands"
+            font.pixelSize: 16
             leftPadding: 52
             rightPadding: clearButton.width + 26
             selectByMouse: true
-            onTextChanged: {
-                if (text !== "")
-                    root.message = ""
-                root.filterResults(text)
-            }
+            onTextChanged: root.filterResults(text)
             onAccepted: root.activate(root.results[root.selectedIndex])
             Keys.onEscapePressed: root.close()
             Keys.onDownPressed: root.moveSelection(1)
@@ -373,9 +401,9 @@ PanelWindow {
 
             background: Rectangle {
                 color: Theme.Theme.surfaceRaised
-                radius: Theme.Theme.radiusMedium
+                radius: height / 2
                 border.width: 1
-                border.color: Theme.Theme.surfaceHover
+                border.color: Qt.darker(Theme.Theme.surfaceRaised, 1.15)
             }
 
             Text {
@@ -407,7 +435,6 @@ PanelWindow {
                 }
             }
         }
-
     }
 
     MouseArea {

@@ -9,6 +9,7 @@ Initial, runnable version of the shell described in `PLAN.md`. It intentionally 
 - Clock beside the launcher icon; centered MPRIS music presence; CPU, RAM, NVIDIA GPU fallback, NetworkManager connection name, PipeWire volume, keyboard layout, and power placeholder on the right.
 - Bottom-sheet launcher, restricted to `DP-1`, opened over a dimmed primary display.
 - Launcher IPC, XDG desktop-entry index, text search, `Escape` close, arrow-key navigation, `Enter` execution, and actions for terminal, lock screen, and shell reload.
+- Launcher favorites: right-click a result or press `Ctrl+P` to toggle its pin. Pinned results appear first and persist across restarts in QuickShell's state directory (`launcher-pins.json`).
 - Central runtime configuration in `config/ShellConfig.qml`, monitor configuration in `config/MachineConfig.qml`, and semantic colors in `theme/Theme.qml`.
 
 Desktop entries are read from `$XDG_DATA_HOME/applications` and each `$XDG_DATA_DIRS/applications` directory. `Hidden=true`, `NoDisplay=true`, invalid, and non-application entries are excluded. User entries take precedence over identically named system desktop files. Applications launch through `gio launch`, which honors their desktop-file `Exec` and `Terminal` handling.

@@ -23,6 +23,7 @@ PanelWindow {
         { kind: "command", name: "Reload shell", description: "Restart QuickShell configuration", keywords: "quickshell config", icon: "󰑓", command: "~/.config/quickshell/scripts/shellctl reload" }
     ]
     property var results: []
+    property var pinnedIds: []
 
     property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     screen: targetScreen
@@ -58,6 +59,25 @@ PanelWindow {
 
     function normalized(value) { return (value || "").toLowerCase() }
 
+    function pinId(item) {
+        return item.kind + ":" + (item.kind === "application" ? item.desktopFile.split("/").pop() : item.name)
+    }
+
+    function isPinned(item) { return pinnedIds.includes(pinId(item)) }
+
+    function togglePin(item) {
+        if (!item)
+            return
+        // Finish the initial read before modifying saved pins.
+        pinsFile.text()
+        const id = pinId(item)
+        pinnedIds = isPinned(item) ? pinnedIds.filter(value => value !== id) : pinnedIds.concat([id])
+        pinsFile.setText(JSON.stringify(pinnedIds))
+        filterResults(search.text)
+        selectedIndex = results.findIndex(result => pinId(result) === id)
+        resultList.positionViewAtIndex(selectedIndex, ListView.Contain)
+    }
+
     function score(item, query) {
         const name = normalized(item.name)
         const searchable = name + " " + normalized(item.description) + " " + normalized(item.keywords)
@@ -75,7 +95,7 @@ PanelWindow {
     function filterResults(query) {
         const needle = normalized(query).trim()
         const scored = applications.concat(commands).map(item => ({ item: item, score: score(item, needle) })).filter(entry => entry.score >= 0)
-        scored.sort((first, second) => second.score - first.score || first.item.name.localeCompare(second.item.name))
+        scored.sort((first, second) => Number(isPinned(second.item)) - Number(isPinned(first.item)) || second.score - first.score || first.item.name.localeCompare(second.item.name))
         results = scored.map(entry => entry.item)
         selectedIndex = 0
         resultList.positionViewAtBeginning()
@@ -100,6 +120,30 @@ PanelWindow {
     }
 
     Process { id: commandRunner }
+
+    FileView {
+        id: pinsFile
+        path: Quickshell.statePath("launcher-pins.json")
+        blockLoading: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: {
+            try {
+                const saved = JSON.parse(text())
+                if (!Array.isArray(saved) || !saved.every(value => typeof value === "string"))
+                    throw new Error("Expected an array of pin IDs")
+                root.pinnedIds = saved
+                root.filterResults(search.text)
+            } catch (error) {
+                console.warn("Cannot read launcher pins:", error)
+            }
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound)
+                console.warn("Cannot load launcher pins:", error)
+        }
+        onSaveFailed: error => console.warn("Cannot save launcher pins:", error)
+    }
 
     Item {
         id: sheet
@@ -278,7 +322,7 @@ PanelWindow {
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: 12
-                        anchors.rightMargin: 14
+                        anchors.rightMargin: root.isPinned(modelData) ? 44 : 14
                         spacing: 13
 
                         Rectangle {
@@ -346,12 +390,29 @@ PanelWindow {
                         }
                     }
 
+                    Text {
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        visible: root.isPinned(modelData)
+                        text: "󰐃"
+                        color: Theme.Theme.accent
+                        font.family: "JetBrainsMono Nerd Font"
+                        font.pixelSize: 17
+                    }
+
                     MouseArea {
                         id: delegateMouse
                         anchors.fill: parent
                         hoverEnabled: true
+                        acceptedButtons: Qt.LeftButton | Qt.RightButton
                         onEntered: root.selectedIndex = index
-                        onClicked: root.activate(modelData)
+                        onClicked: mouse => {
+                            if (mouse.button === Qt.RightButton)
+                                root.togglePin(modelData)
+                            else
+                                root.activate(modelData)
+                        }
                     }
                 }
 
@@ -389,6 +450,13 @@ PanelWindow {
             Keys.onEscapePressed: root.close()
             Keys.onDownPressed: root.moveSelection(1)
             Keys.onUpPressed: root.moveSelection(-1)
+            Keys.onPressed: event => {
+                if (event.key === Qt.Key_P && event.modifiers === Qt.ControlModifier) {
+                    if (!event.isAutoRepeat)
+                        root.togglePin(root.results[root.selectedIndex])
+                    event.accepted = true
+                }
+            }
 
             background: Rectangle {
                 color: Theme.Theme.surfaceRaised

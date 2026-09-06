@@ -20,10 +20,13 @@ PanelWindow {
     property var commands: [
         { kind: "command", name: "Terminal", description: "Open Kitty", keywords: "shell console kitty", icon: "", command: Config.ShellConfig.terminalCommand },
         { kind: "command", name: "Lock screen", description: "Lock with hyprlock", keywords: "session security", icon: "󰌾", command: "hyprlock" },
-        { kind: "command", name: "Reload shell", description: "Restart QuickShell configuration", keywords: "quickshell config", icon: "󰑓", command: "~/.config/quickshell/scripts/shellctl reload" }
+        { kind: "command", name: "Reload shell", description: "Restart QuickShell configuration", keywords: "quickshell config", icon: "󰑓", command: "~/.config/quickshell/scripts/shellctl reload" },
+        { kind: "category", name: "Hidden", description: "Hidden entries - Ctrl+H to restore", keywords: "hidden hide скрытые", icon: "󰈉" }
     ]
     property var results: []
     property var pinnedIds: []
+    property var hiddenIds: []
+    property bool showingHidden: false
 
     property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     screen: targetScreen
@@ -40,6 +43,7 @@ PanelWindow {
     function open(clearMessage = true) {
         if (clearMessage)
             message = ""
+        showingHidden = false
         search.text = ""
         filterResults("")
         presented = true
@@ -64,6 +68,28 @@ PanelWindow {
     }
 
     function isPinned(item) { return pinnedIds.includes(pinId(item)) }
+    function isHidden(item) { return hiddenIds.includes(pinId(item)) }
+
+    function toggleHidden(item) {
+        if (!item || item.kind === "category")
+            return
+        hiddenFile.text()
+        const id = pinId(item)
+        const previousIndex = selectedIndex
+        hiddenIds = isHidden(item) ? hiddenIds.filter(value => value !== id) : hiddenIds.concat([id])
+        hiddenFile.setText(JSON.stringify(hiddenIds))
+        filterResults(search.text)
+        selectedIndex = Math.max(0, Math.min(previousIndex, results.length - 1))
+        if (results.length)
+            resultList.positionViewAtIndex(selectedIndex, ListView.Contain)
+    }
+
+    function showHiddenEntries(show) {
+        showingHidden = show
+        search.text = ""
+        filterResults("")
+        search.forceActiveFocus()
+    }
 
     function togglePin(item) {
         if (!item)
@@ -94,7 +120,7 @@ PanelWindow {
 
     function filterResults(query) {
         const needle = normalized(query).trim()
-        const scored = applications.concat(commands).map(item => ({ item: item, score: score(item, needle) })).filter(entry => entry.score >= 0)
+        const scored = applications.concat(commands).filter(item => showingHidden ? item.kind !== "category" && isHidden(item) : item.kind === "category" || !isHidden(item)).map(item => ({ item: item, score: score(item, needle) })).filter(entry => entry.score >= 0)
         scored.sort((first, second) => Number(isPinned(second.item)) - Number(isPinned(first.item)) || second.score - first.score || first.item.name.localeCompare(second.item.name))
         results = scored.map(entry => entry.item)
         selectedIndex = 0
@@ -111,6 +137,10 @@ PanelWindow {
     function activate(item) {
         if (!item)
             return
+        if (item.kind === "category") {
+            showHiddenEntries(true)
+            return
+        }
         if (item.kind === "application")
             commandRunner.command = ["gio", "launch", item.desktopFile]
         else
@@ -143,6 +173,30 @@ PanelWindow {
                 console.warn("Cannot load launcher pins:", error)
         }
         onSaveFailed: error => console.warn("Cannot save launcher pins:", error)
+    }
+
+    FileView {
+        id: hiddenFile
+        path: Quickshell.statePath("launcher-hidden.json")
+        blockLoading: true
+        atomicWrites: true
+        printErrors: false
+        onLoaded: {
+            try {
+                const saved = JSON.parse(text())
+                if (!Array.isArray(saved) || !saved.every(value => typeof value === "string"))
+                    throw new Error("Expected an array of hidden IDs")
+                root.hiddenIds = saved
+                root.filterResults(search.text)
+            } catch (error) {
+                console.warn("Cannot read hidden launcher entries:", error)
+            }
+        }
+        onLoadFailed: error => {
+            if (error !== FileViewError.FileNotFound)
+                console.warn("Cannot load hidden launcher entries:", error)
+        }
+        onSaveFailed: error => console.warn("Cannot save hidden launcher entries:", error)
     }
 
     Item {
@@ -329,7 +383,7 @@ PanelWindow {
                             Layout.preferredWidth: 40
                             Layout.preferredHeight: 40
                             radius: Theme.Theme.radiusSmall
-                            color: modelData.kind === "command" ? Theme.Theme.surfaceRaised : "transparent"
+                            color: modelData.kind !== "application" ? Theme.Theme.surfaceRaised : "transparent"
 
                             Image {
                                 id: applicationIcon
@@ -355,7 +409,7 @@ PanelWindow {
 
                             Text {
                                 anchors.centerIn: parent
-                                visible: modelData.kind === "command"
+                                visible: modelData.kind !== "application"
                                 text: modelData.icon
                                 color: Theme.Theme.accent
                                 font.family: "JetBrainsMono Nerd Font"
@@ -420,7 +474,7 @@ PanelWindow {
                     width: resultList.width
                     height: visible ? resultList.height : 0
                     visible: resultList.count === 0
-                    text: root.message !== "" ? root.message : "No results"
+                    text: root.message !== "" ? root.message : root.showingHidden && search.text === "" ? "No hidden entries" : "No results"
                     color: root.message !== "" ? Theme.Theme.accent : Theme.Theme.textMuted
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -437,7 +491,7 @@ PanelWindow {
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
             anchors.leftMargin: sheet.frameInset + sheet.padding
             anchors.rightMargin: sheet.frameInset + sheet.padding
-            placeholderText: "Search applications and commands"
+            placeholderText: root.showingHidden ? "Hidden - Ctrl+H: restore / Esc: back" : "Search applications and commands"
             color: Theme.Theme.textPrimary
             placeholderTextColor: Theme.Theme.textMuted
             font.family: "JetBrainsMono Nerd Font"
@@ -447,13 +501,17 @@ PanelWindow {
             selectByMouse: true
             onTextChanged: root.filterResults(text)
             onAccepted: root.activate(root.results[root.selectedIndex])
-            Keys.onEscapePressed: root.close()
+            Keys.onEscapePressed: root.showingHidden ? root.showHiddenEntries(false) : root.close()
             Keys.onDownPressed: root.moveSelection(1)
             Keys.onUpPressed: root.moveSelection(-1)
             Keys.onPressed: event => {
                 if (event.key === Qt.Key_P && event.modifiers === Qt.ControlModifier) {
                     if (!event.isAutoRepeat)
                         root.togglePin(root.results[root.selectedIndex])
+                    event.accepted = true
+                } else if (event.key === Qt.Key_H && event.modifiers === Qt.ControlModifier) {
+                    if (!event.isAutoRepeat)
+                        root.toggleHidden(root.results[root.selectedIndex])
                     event.accepted = true
                 }
             }

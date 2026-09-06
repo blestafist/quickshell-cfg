@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 
@@ -35,7 +36,6 @@ PanelWindow {
     }
 
     function open(clearMessage = true) {
-        closeTimer.stop()
         if (clearMessage)
             message = ""
         search.text = ""
@@ -49,7 +49,6 @@ PanelWindow {
 
     function close() {
         opened = false
-        closeTimer.restart()
     }
 
     function toggle() { opened ? close() : open() }
@@ -100,113 +99,101 @@ PanelWindow {
 
     Process { id: commandRunner }
 
-    Timer {
-        id: closeTimer
-        interval: Config.ShellConfig.animationsEnabled ? 360 : 0
-        onTriggered: root.presented = false
-    }
-
     Item {
         id: sheet
 
         readonly property int padding: 12
-        readonly property int frameInset: 16
-        readonly property int frameFlare: frameInset - 16
-        readonly property int frameTopRadius: Theme.Theme.radiusLarge + frameInset - frameFlare
+        readonly property int frameInset: 36
+        readonly property real frameFlare: 36 + 32 * (1 - reveal)
+        readonly property real frameTopRadius: Math.min(width / 2 - frameFlare, 40 + 100 * (1 - reveal))
+        property real reveal: root.opened ? 1 : 0
+        readonly property real swell: Math.sin(reveal * Math.PI)
         readonly property int rowHeight: 72
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 7)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
 
         z: 1
         width: Math.min(Config.ShellConfig.launcherWidth + frameInset * 2, parent.width - 24)
-        height: Math.min(Config.ShellConfig.launcherHeight, listHeight + 76)
+        height: Math.min(Config.ShellConfig.launcherHeight, listHeight + 76, parent.height - Config.ShellConfig.launcherBottomMargin - frameInset - 12)
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
-        opacity: root.opened ? 1 : 0
-
-        transform: Translate {
-            y: root.opened ? 0 : sheet.height + Config.ShellConfig.launcherBottomMargin + 5
-
-            Behavior on y {
-                enabled: Config.ShellConfig.animationsEnabled
-                NumberAnimation {
-                    duration: 480
-                    easing.type: Easing.BezierSpline
-                    easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
-                }
-            }
+        enabled: root.opened
+        visible: reveal > 0
+        // Keep the entire surface attached to the screen edge throughout the morph.
+        transform: Scale {
+            origin.x: sheet.width / 2
+            origin.y: sheet.height + Config.ShellConfig.launcherBottomMargin
+            xScale: 0.18 + 0.82 * sheet.reveal - 0.10 * sheet.swell
+            yScale: sheet.reveal + 0.12 * sheet.swell
         }
 
-        Behavior on opacity {
+        onRevealChanged: {
+            if (reveal === 0 && !root.opened)
+                root.presented = false
+        }
+
+        Behavior on reveal {
             enabled: Config.ShellConfig.animationsEnabled
             NumberAnimation {
-                duration: 360
+                duration: root.opened ? 560 : 420
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                easing.bezierCurve: [0.22, 0.72, 0.18, 1, 1, 1]
             }
         }
 
         Behavior on height {
-            enabled: Config.ShellConfig.animationsEnabled
+            enabled: Config.ShellConfig.animationsEnabled && root.presented
             NumberAnimation {
-                duration: 280
+                duration: 320
                 easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                easing.bezierCurve: [0.22, 0.72, 0.18, 1, 1, 1]
             }
         }
 
-        Canvas {
+        Shape {
             id: outerFrame
             x: 0
             y: -sheet.frameInset
             width: parent.width
             height: parent.height + Config.ShellConfig.launcherBottomMargin + sheet.frameInset
             z: -1
+            preferredRendererType: Shape.CurveRenderer
 
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            Component.onCompleted: requestPaint()
-
-            Connections {
-                target: Theme.Theme
-                function onSurfaceChanged() { outerFrame.requestPaint() }
-            }
-
-            onPaint: {
-                const context = getContext("2d")
-                const flare = sheet.frameFlare
-                const radius = sheet.frameTopRadius
-                const frameColor = Qt.darker(Theme.Theme.surface, 1.50)
-                context.reset()
-                context.beginPath()
-                context.moveTo(flare + radius, 0)
-                context.lineTo(width - flare - radius, 0)
-                context.quadraticCurveTo(width - flare, 0, width - flare, radius)
-                context.lineTo(width - flare, height - flare)
-                context.bezierCurveTo(width - flare, height - 10, width - 10, height, width, height)
-                context.lineTo(0, height)
-                context.bezierCurveTo(10, height, flare, height - 10, flare, height - flare)
-                context.lineTo(flare, radius)
-                context.quadraticCurveTo(flare, 0, flare + radius, 0)
-                context.closePath()
-                context.fillStyle = frameColor
-                context.fill()
-                context.strokeStyle = Qt.darker(frameColor, 1.2)
-                context.lineWidth = 1
-                context.stroke()
+            ShapePath {
+                readonly property real f: sheet.frameFlare
+                readonly property real r: sheet.frameTopRadius
+                readonly property real w: outerFrame.width
+                readonly property real h: outerFrame.height
+                id: outline
+                strokeWidth: 0
+                fillColor: Theme.Theme.surface
+                startX: f + r
+                startY: 0
+                PathLine { x: outline.w - outline.f - outline.r; y: 0 }
+                PathQuad { x: outline.w - outline.f; y: outline.r; controlX: outline.w - outline.f; controlY: 0 }
+                PathLine { x: outline.w - outline.f; y: outline.h - outline.f }
+                PathCubic {
+                    x: outline.w; y: outline.h
+                    control1X: outline.w - outline.f; control1Y: outline.h - outline.f * 0.35
+                    control2X: outline.w - outline.f * 0.65; control2Y: outline.h
+                }
+                PathLine { x: 0; y: outline.h }
+                PathCubic {
+                    x: outline.f; y: outline.h - outline.f
+                    control1X: outline.f * 0.65; control1Y: outline.h
+                    control2X: outline.f; control2Y: outline.h - outline.f * 0.35
+                }
+                PathLine { x: outline.f; y: outline.r }
+                PathQuad { x: outline.f + outline.r; y: 0; controlX: outline.f; controlY: 0 }
             }
         }
 
-        Rectangle {
+        Item {
             id: listSurface
             anchors { top: parent.top; left: parent.left; right: parent.right; bottom: search.top; bottomMargin: 12 }
             anchors.leftMargin: sheet.frameInset
             anchors.rightMargin: sheet.frameInset
-            color: Theme.Theme.surface
-            radius: Theme.Theme.radiusLarge
-            border.width: 1
-            border.color: Qt.darker(Theme.Theme.surface, 1.2)
 
             ListView {
                 id: resultList
@@ -244,7 +231,7 @@ PanelWindow {
                         property: "opacity"
                         from: 0
                         to: 1
-                        duration: 200
+                        duration: Config.ShellConfig.animationsEnabled ? 160 : 0
                         easing.type: Easing.BezierSpline
                         easing.bezierCurve: [0.34, 0.8, 0.34, 1, 1, 1]
                     }
@@ -255,7 +242,7 @@ PanelWindow {
                         property: "opacity"
                         from: 1
                         to: 0
-                        duration: 200
+                        duration: Config.ShellConfig.animationsEnabled ? 120 : 0
                         easing.type: Easing.BezierSpline
                         easing.bezierCurve: [0.34, 0.8, 0.34, 1, 1, 1]
                     }
@@ -264,9 +251,9 @@ PanelWindow {
                 displaced: Transition {
                     NumberAnimation {
                         property: "y"
-                        duration: 500
+                        duration: Config.ShellConfig.animationsEnabled ? 280 : 0
                         easing.type: Easing.BezierSpline
-                        easing.bezierCurve: [0.38, 1.21, 0.22, 1, 1, 1]
+                        easing.bezierCurve: [0.22, 0.72, 0.18, 1, 1, 1]
                     }
                 }
 

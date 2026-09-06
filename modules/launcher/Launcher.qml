@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 
 import "../../config" as Config
 import "../../theme" as Theme
@@ -29,10 +30,10 @@ PanelWindow {
     anchors { top: true; bottom: true; left: true; right: true }
     exclusiveZone: 0
     color: "transparent"
-    focusable: opened
+    WlrLayershell.keyboardFocus: presented ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     mask: Region {
-        width: root.opened ? root.width : 0
-        height: root.opened ? root.height : 0
+        width: root.presented ? root.width : 0
+        height: root.presented ? root.height : 0
     }
 
     function open(clearMessage = true) {
@@ -41,6 +42,7 @@ PanelWindow {
         search.text = ""
         filterResults("")
         presented = true
+        search.forceActiveFocus()
         Qt.callLater(() => {
             opened = true
             search.forceActiveFocus()
@@ -118,8 +120,8 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
-        enabled: root.opened
-        visible: reveal > 0
+        enabled: root.presented
+        visible: root.presented
         // Keep the entire surface attached to the screen edge throughout the morph.
         transform: Scale {
             origin.x: sheet.width / 2
@@ -154,9 +156,9 @@ PanelWindow {
         Shape {
             id: outerFrame
             x: 0
-            y: -sheet.frameInset
+            y: -sheet.padding
             width: parent.width
-            height: parent.height + Config.ShellConfig.launcherBottomMargin + sheet.frameInset
+            height: parent.height + Config.ShellConfig.launcherBottomMargin + sheet.padding
             z: -1
             preferredRendererType: Shape.CurveRenderer
 
@@ -368,10 +370,11 @@ PanelWindow {
 
         TextField {
             id: search
+            focus: true
             height: 64
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }
-            anchors.leftMargin: sheet.frameInset
-            anchors.rightMargin: sheet.frameInset
+            anchors.leftMargin: sheet.frameInset + sheet.padding
+            anchors.rightMargin: sheet.frameInset + sheet.padding
             placeholderText: "Search applications and commands"
             color: Theme.Theme.textPrimary
             placeholderTextColor: Theme.Theme.textMuted
@@ -427,7 +430,7 @@ PanelWindow {
     MouseArea {
         anchors.fill: parent
         z: 0
-        enabled: root.opened
+        enabled: root.presented
         onClicked: root.close()
     }
 

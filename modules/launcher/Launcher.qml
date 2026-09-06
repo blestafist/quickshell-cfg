@@ -111,7 +111,7 @@ PanelWindow {
         property real reveal: root.opened ? 1 : 0
         readonly property real swell: Math.sin(reveal * Math.PI)
         readonly property int rowHeight: 72
-        readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 7)
+        readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 6)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
 
         z: 1
@@ -156,9 +156,9 @@ PanelWindow {
         Shape {
             id: outerFrame
             x: 0
-            y: -sheet.padding
+            y: 0
             width: parent.width
-            height: parent.height + Config.ShellConfig.launcherBottomMargin + sheet.padding
+            height: parent.height + Config.ShellConfig.launcherBottomMargin
             z: -1
             preferredRendererType: Shape.CurveRenderer
 
@@ -206,6 +206,7 @@ PanelWindow {
                 currentIndex: root.selectedIndex
                 spacing: 6
                 boundsBehavior: Flickable.StopAtBounds
+                snapMode: ListView.SnapToItem
                 preferredHighlightBegin: 0
                 preferredHighlightEnd: height
                 highlightRangeMode: ListView.ApplyRange
@@ -356,7 +357,7 @@ PanelWindow {
 
                 footer: Text {
                     width: resultList.width
-                    height: resultList.height
+                    height: visible ? resultList.height : 0
                     visible: resultList.count === 0
                     text: root.message !== "" ? root.message : "No results"
                     color: root.message !== "" ? Theme.Theme.accent : Theme.Theme.textMuted

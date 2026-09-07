@@ -87,7 +87,7 @@ Scope {
             screen: modelData
             visible: root.presented
             anchors { top: true; bottom: true; left: true; right: true }
-            exclusiveZone: 0
+            exclusionMode: ExclusionMode.Ignore
             color: "transparent"
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None

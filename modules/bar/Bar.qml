@@ -14,6 +14,7 @@ PanelWindow {
 
     property var stats
     property var launcher
+    property var powerOverlay
     property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     property date currentTime: new Date()
     property int barHeight: 42
@@ -23,13 +24,31 @@ PanelWindow {
     property bool showMemoryGigabytes: false
     property bool showFullDate: false
     property bool wifiOpened: false
-    onWifiOpenedChanged: if (wifiOpened) wifiPanel.forceActiveFocus()
+    property bool powerOpened: false
+    property bool menuOpened: wifiOpened || powerOpened
+    onWifiOpenedChanged: {
+        if (wifiOpened) {
+            powerOpened = false
+            wifiPanel.forceActiveFocus()
+        }
+    }
+    onPowerOpenedChanged: {
+        if (powerOpened) {
+            wifiOpened = false
+            powerPanel.forceActiveFocus()
+        }
+    }
 
     Services.Wifi { id: wifiService; opened: root.wifiOpened }
     IpcHandler {
         target: "wifi"
         function toggle() { root.wifiOpened = !root.wifiOpened }
         function close() { root.wifiOpened = false }
+    }
+    IpcHandler {
+        target: "power"
+        function toggle() { root.powerOpened = !root.powerOpened }
+        function close() { root.powerOpened = false }
     }
 
     screen: targetScreen
@@ -40,7 +59,7 @@ PanelWindow {
     // Keep the layer surface stable; only the island and its input region animate.
     implicitHeight: screen ? screen.height : 1080
     color: "transparent"
-    WlrLayershell.keyboardFocus: wifiOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     mask: Region {
         width: root.width
         height: root.barHeight
@@ -342,7 +361,7 @@ PanelWindow {
         // Properties
         property real powerButtonIconOffsetX: -6
         property real powerButtonIconOffsetY: 0
-        property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : 0)
+        property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : root.powerOpened ? powerPanel.implicitHeight : 0)
         onTargetHeightChanged: {
             islandHeightAnimation.stop()
             if (!Config.ShellConfig.animationsEnabled) {
@@ -351,7 +370,7 @@ PanelWindow {
             }
             islandHeightAnimation.from = height
             islandHeightAnimation.to = targetHeight
-            islandHeightAnimation.duration = root.wifiOpened ? 420 : 280
+            islandHeightAnimation.duration = root.menuOpened ? 420 : 280
             islandHeightAnimation.easing.type = targetHeight > height ? Easing.OutBack : Easing.OutCubic
             islandHeightAnimation.start()
         }
@@ -359,7 +378,7 @@ PanelWindow {
 
         anchors.right: parent.right
         anchors.top: parent.top
-        width: root.wifiOpened ? Math.min(root.width, Math.max(540, rightContent.width + 64)) : rightContent.width + 20
+        width: root.wifiOpened ? Math.min(root.width, Math.max(540, rightContent.width + 64)) : root.powerOpened ? Math.max(344, rightContent.width + 20) : rightContent.width + 20
         height: root.barHeight
 
         NumberAnimation {
@@ -370,7 +389,7 @@ PanelWindow {
 
         Behavior on width {
             enabled: Config.ShellConfig.animationsEnabled
-            NumberAnimation { duration: root.wifiOpened ? 420 : 280; easing.type: root.wifiOpened ? Easing.OutBack : Easing.OutCubic }
+            NumberAnimation { duration: root.menuOpened ? 420 : 280; easing.type: root.menuOpened ? Easing.OutBack : Easing.OutCubic }
         }
 
         Shape {
@@ -433,7 +452,8 @@ PanelWindow {
                 }
 
                 icon: "⏻";
-                onClicked: root.launcher.showMessage("Power menu is planned for a later release")
+                tooltip: "Power menu"
+                onClicked: root.powerOpened = !root.powerOpened
             }
         }
 
@@ -456,6 +476,22 @@ PanelWindow {
                 Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 180 : 0 } }
                 Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.wifiOpened ? 420 : 280) : 0; easing.type: root.wifiOpened ? Easing.OutBack : Easing.OutCubic } }
                 onCloseRequested: root.wifiOpened = false
+            }
+            PowerPanel {
+                id: powerPanel
+                width: parent.width
+                height: implicitHeight
+                visible: parent.height > 0 && !root.wifiOpened
+                enabled: root.powerOpened
+                opacity: root.powerOpened ? 1 : 0
+                y: root.powerOpened ? 0 : -12
+                Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 180 : 0 } }
+                Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.powerOpened ? 420 : 280) : 0; easing.type: root.powerOpened ? Easing.OutBack : Easing.OutCubic } }
+                onCloseRequested: root.powerOpened = false
+                onActionRequested: action => {
+                    root.powerOpened = false
+                    root.powerOverlay.trigger(action)
+                }
             }
         }
     }

@@ -2,10 +2,12 @@ import QtQuick
 import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
+import Quickshell.Wayland
 
 import "../../components" as Components
 import "../../config" as Config
 import "../../theme" as Theme
+import "../../services" as Services
 
 PanelWindow {
     id: root
@@ -20,14 +22,30 @@ PanelWindow {
     property int islandRadius: 24
     property bool showMemoryGigabytes: false
     property bool showFullDate: false
+    property bool wifiOpened: false
+    onWifiOpenedChanged: if (wifiOpened) wifiPanel.forceActiveFocus()
+
+    Services.Wifi { id: wifiService; opened: root.wifiOpened }
+    IpcHandler {
+        target: "wifi"
+        function toggle() { root.wifiOpened = !root.wifiOpened }
+        function close() { root.wifiOpened = false }
+    }
 
     screen: targetScreen
     visible: targetScreen !== null
     anchors { top: true; left: true; right: true }
     margins { top: 0; left: 0; right: 0 }
     exclusiveZone: barHeight
-    implicitHeight: barHeight
+    // Keep the layer surface stable; only the island and its input region animate.
+    implicitHeight: screen ? screen.height : 1080
     color: "transparent"
+    WlrLayershell.keyboardFocus: wifiOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    mask: Region {
+        width: root.width
+        height: root.barHeight
+        Region { item: rightCluster }
+    }
 
     Item {
         id: leftCluster
@@ -324,16 +342,35 @@ PanelWindow {
         // Properties
         property real powerButtonIconOffsetX: -6
         property real powerButtonIconOffsetY: 0
+        property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : 0)
+        onTargetHeightChanged: {
+            islandHeightAnimation.stop()
+            if (!Config.ShellConfig.animationsEnabled) {
+                height = targetHeight
+                return
+            }
+            islandHeightAnimation.from = height
+            islandHeightAnimation.to = targetHeight
+            islandHeightAnimation.duration = root.wifiOpened ? 420 : 280
+            islandHeightAnimation.easing.type = targetHeight > height ? Easing.OutBack : Easing.OutCubic
+            islandHeightAnimation.start()
+        }
 
 
         anchors.right: parent.right
         anchors.top: parent.top
-        width: rightContent.width + 20
+        width: root.wifiOpened ? Math.min(root.width, Math.max(540, rightContent.width + 64)) : rightContent.width + 20
         height: root.barHeight
+
+        NumberAnimation {
+            id: islandHeightAnimation
+            target: rightCluster
+            property: "height"
+        }
 
         Behavior on width {
             enabled: Config.ShellConfig.animationsEnabled
-            NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+            NumberAnimation { duration: root.wifiOpened ? 420 : 280; easing.type: root.wifiOpened ? Easing.OutBack : Easing.OutCubic }
         }
 
         Shape {
@@ -364,7 +401,7 @@ PanelWindow {
             id: rightContent
             anchors.right: parent.right
             anchors.rightMargin: 7
-            anchors.verticalCenter: parent.verticalCenter
+            y: (root.barHeight - height) / 2
             spacing: 8
 
             Components.StatusItem { icon: "󰍛"; value: root.stats.cpu; accessibleName: "CPU usage" }
@@ -375,7 +412,7 @@ PanelWindow {
                 onClicked: root.showMemoryGigabytes = !root.showMemoryGigabytes
             }
             Rectangle { width: 1; height: 18; color: Theme.Theme.surfaceHover; anchors.verticalCenter: parent.verticalCenter }
-            Components.StatusItem { icon: root.stats.network === "Offline" ? "󰤭" : "󰤨"; value: root.stats.network; accessibleName: "Network"; onClicked: networkSettings.running = true }
+            Components.StatusItem { icon: root.stats.network === "Offline" ? "󰤭" : "󰤨"; value: root.stats.network; accessibleName: "Network"; onClicked: root.wifiOpened = !root.wifiOpened }
             Components.StatusItem {
                 icon: root.stats.muted ? "󰝟" : "󰕾"
                 value: root.stats.muted ? "Muted" : root.stats.volume
@@ -399,9 +436,30 @@ PanelWindow {
                 onClicked: root.launcher.showMessage("Power menu is planned for a later release")
             }
         }
+
+        Item {
+            x: 0
+            y: root.barHeight
+            width: parent.width
+            height: Math.max(0, parent.height - root.barHeight - 8)
+            clip: true
+            WifiPanel {
+                id: wifiPanel
+                width: parent.width
+                height: implicitHeight
+                maximumHeight: root.height - root.barHeight - 24
+                wifi: wifiService
+                visible: parent.height > 0
+                enabled: root.wifiOpened
+                opacity: root.wifiOpened ? 1 : 0
+                y: root.wifiOpened ? 0 : -12
+                Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 180 : 0 } }
+                Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.wifiOpened ? 420 : 280) : 0; easing.type: root.wifiOpened ? Easing.OutBack : Easing.OutCubic } }
+                onCloseRequested: root.wifiOpened = false
+            }
+        }
     }
 
-    Process { id: networkSettings; command: ["sh", "-c", Config.ShellConfig.networkSettingsCommand] }
     Process { id: volumeToggle; command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"] }
     Process { id: volumeUp; command: ["wpctl", "set-volume", "-l", "1.0", "@DEFAULT_AUDIO_SINK@", "5%+"] }
     Process { id: volumeDown; command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"] }

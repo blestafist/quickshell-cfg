@@ -11,6 +11,7 @@ Rectangle {
     property string accessibleName: ""
     property bool accentValue: false
     signal clicked()
+    signal rightClicked()
     signal wheelScrolled(int delta)
 
     implicitWidth: content.width + 20
@@ -45,7 +46,13 @@ Rectangle {
         id: mouse
         anchors.fill: parent
         hoverEnabled: true
-        onClicked: root.clicked()
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
+        onClicked: mouse => {
+            if (mouse.button === Qt.RightButton)
+                root.rightClicked()
+            else
+                root.clicked()
+        }
         onWheel: wheel => root.wheelScrolled(wheel.angleDelta.y)
     }
 }

@@ -24,22 +24,40 @@ PanelWindow {
     property bool showMemoryGigabytes: false
     property bool showFullDate: false
     property bool wifiOpened: false
+    property bool vpnOpened: false
     property bool powerOpened: false
-    property bool menuOpened: wifiOpened || powerOpened
+    property bool menuOpened: wifiOpened || vpnOpened || powerOpened
     onWifiOpenedChanged: {
         if (wifiOpened) {
+            vpnOpened = false
             powerOpened = false
             wifiPanel.forceActiveFocus()
+        }
+    }
+    onVpnOpenedChanged: {
+        if (vpnOpened) {
+            wifiOpened = false
+            powerOpened = false
+            vpnPanel.forceActiveFocus()
         }
     }
     onPowerOpenedChanged: {
         if (powerOpened) {
             wifiOpened = false
+            vpnOpened = false
             powerPanel.forceActiveFocus()
         }
     }
 
     Services.Wifi { id: wifiService; opened: root.wifiOpened }
+    Services.Vpn { id: vpnService; opened: root.vpnOpened }
+    IpcHandler {
+        target: "vpn"
+        function toggle() { root.vpnOpened = !root.vpnOpened }
+        function close() { root.vpnOpened = false }
+        function connect() { vpnService.connectTarget({ type: "fastest", value: "", label: "Fastest server" }) }
+        function disconnect() { vpnService.disconnect() }
+    }
     IpcHandler {
         target: "wifi"
         function toggle() { root.wifiOpened = !root.wifiOpened }
@@ -361,7 +379,7 @@ PanelWindow {
         // Properties
         property real powerButtonIconOffsetX: -6
         property real powerButtonIconOffsetY: 0
-        property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : root.powerOpened ? powerPanel.implicitHeight : 0)
+        property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : root.vpnOpened ? vpnPanel.implicitHeight : root.powerOpened ? powerPanel.implicitHeight : 0)
         onTargetHeightChanged: {
             islandHeightAnimation.stop()
             if (!Config.ShellConfig.animationsEnabled) {
@@ -378,7 +396,7 @@ PanelWindow {
 
         anchors.right: parent.right
         anchors.top: parent.top
-        width: root.wifiOpened ? Math.min(root.width, Math.max(540, rightContent.width + 64)) : root.powerOpened ? Math.max(344, rightContent.width + 20) : rightContent.width + 20
+        width: root.wifiOpened || root.vpnOpened ? Math.min(root.width, Math.max(600, rightContent.width + 64)) : root.powerOpened ? Math.max(344, rightContent.width + 20) : rightContent.width + 20
         height: root.barHeight
 
         NumberAnimation {
@@ -431,7 +449,13 @@ PanelWindow {
                 onClicked: root.showMemoryGigabytes = !root.showMemoryGigabytes
             }
             Rectangle { width: 1; height: 18; color: Theme.Theme.surfaceHover; anchors.verticalCenter: parent.verticalCenter }
-            Components.StatusItem { icon: root.stats.network === "Offline" ? "󰤭" : "󰤨"; value: root.stats.network; accessibleName: "Network"; onClicked: root.wifiOpened = !root.wifiOpened }
+            Components.StatusItem {
+                icon: vpnService.connected ? "󰦝" : root.stats.network === "Offline" ? "󰤭" : "󰤨"
+                value: root.stats.network
+                accessibleName: "Network: left click Wi-Fi, right click VPN"
+                onClicked: root.wifiOpened = !root.wifiOpened
+                onRightClicked: root.vpnOpened = !root.vpnOpened
+            }
             Components.StatusItem {
                 icon: root.stats.muted ? "󰝟" : "󰕾"
                 value: root.stats.muted ? "Muted" : root.stats.volume
@@ -477,11 +501,25 @@ PanelWindow {
                 Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.wifiOpened ? 420 : 280) : 0; easing.type: root.wifiOpened ? Easing.OutBack : Easing.OutCubic } }
                 onCloseRequested: root.wifiOpened = false
             }
+            VpnPanel {
+                id: vpnPanel
+                width: parent.width
+                height: implicitHeight
+                maximumHeight: root.height - root.barHeight - 24
+                vpn: vpnService
+                visible: parent.height > 0 && !root.wifiOpened
+                enabled: root.vpnOpened
+                opacity: root.vpnOpened ? 1 : 0
+                y: root.vpnOpened ? 0 : -12
+                Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 180 : 0 } }
+                Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.vpnOpened ? 420 : 280) : 0; easing.type: root.vpnOpened ? Easing.OutBack : Easing.OutCubic } }
+                onCloseRequested: root.vpnOpened = false
+            }
             PowerPanel {
                 id: powerPanel
                 width: parent.width
                 height: implicitHeight
-                visible: parent.height > 0 && !root.wifiOpened
+                visible: parent.height > 0 && !root.wifiOpened && !root.vpnOpened
                 enabled: root.powerOpened
                 opacity: root.powerOpened ? 1 : 0
                 y: root.powerOpened ? 0 : -12

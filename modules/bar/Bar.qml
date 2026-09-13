@@ -15,6 +15,7 @@ PanelWindow {
     property var stats
     property var launcher
     property var powerOverlay
+    property var openCode
     property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     property date currentTime: new Date()
     property int barHeight: 42
@@ -26,11 +27,13 @@ PanelWindow {
     property bool wifiOpened: false
     property bool vpnOpened: false
     property bool powerOpened: false
-    property bool menuOpened: wifiOpened || vpnOpened || powerOpened
+    property bool aiChatOpened: false
+    property bool menuOpened: wifiOpened || vpnOpened || powerOpened || aiChatOpened
     onWifiOpenedChanged: {
         if (wifiOpened) {
             vpnOpened = false
             powerOpened = false
+            aiChatOpened = false
             wifiPanel.forceActiveFocus()
         }
     }
@@ -38,6 +41,7 @@ PanelWindow {
         if (vpnOpened) {
             wifiOpened = false
             powerOpened = false
+            aiChatOpened = false
             vpnPanel.forceActiveFocus()
         }
     }
@@ -45,7 +49,16 @@ PanelWindow {
         if (powerOpened) {
             wifiOpened = false
             vpnOpened = false
+            aiChatOpened = false
             powerPanel.forceActiveFocus()
+        }
+    }
+    onAiChatOpenedChanged: {
+        if (aiChatOpened) {
+            wifiOpened = false
+            vpnOpened = false
+            powerOpened = false
+            chatPanel.forceActiveFocus()
         }
     }
 
@@ -68,6 +81,20 @@ PanelWindow {
         function toggle() { root.powerOpened = !root.powerOpened }
         function close() { root.powerOpened = false }
     }
+    IpcHandler {
+        target: "aichat"
+        function toggle() { root.aiChatOpened = !root.aiChatOpened }
+        function close() { root.aiChatOpened = false }
+        function newSession() {
+            root.openCode.createSession()
+            root.aiChatOpened = true
+        }
+        function sendMessage(text: string) {
+            if (!root.openCode.activeSession()) root.openCode.createSession()
+            else root.openCode.sendMessage(root.openCode.activeSessionId, text)
+            root.aiChatOpened = true
+        }
+    }
 
     screen: targetScreen
     visible: targetScreen !== null
@@ -81,19 +108,41 @@ PanelWindow {
     mask: Region {
         width: root.width
         height: root.barHeight
+        Region { item: leftCluster }
         Region { item: rightCluster }
     }
 
     Item {
         id: leftCluster
+        property real targetHeight: root.barHeight + (root.aiChatOpened ? chatPanel.implicitHeight : 0)
+
+        onTargetHeightChanged: {
+            leftIslandHeightAnimation.stop()
+            if (!Config.ShellConfig.animationsEnabled) {
+                height = targetHeight
+                return
+            }
+            leftIslandHeightAnimation.from = height
+            leftIslandHeightAnimation.to = targetHeight
+            leftIslandHeightAnimation.duration = root.aiChatOpened ? 420 : 280
+            leftIslandHeightAnimation.easing.type = targetHeight > height ? Easing.OutBack : Easing.OutCubic
+            leftIslandHeightAnimation.start()
+        }
+
         anchors.left: parent.left
         anchors.top: parent.top
-        width: leftContent.width + root.edgeRadius + 18
+        width: root.aiChatOpened ? Math.min(root.width, Math.max(Config.ShellConfig.aiChatWidth, leftContent.width + root.edgeRadius + 18)) : leftContent.width + root.edgeRadius + 18
         height: root.barHeight
+
+        NumberAnimation {
+            id: leftIslandHeightAnimation
+            target: leftCluster
+            property: "height"
+        }
 
         Behavior on width {
             enabled: Config.ShellConfig.animationsEnabled
-            NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+            NumberAnimation { duration: root.aiChatOpened ? 420 : 280; easing.type: root.aiChatOpened ? Easing.OutBack : Easing.OutCubic }
         }
 
         Shape {
@@ -122,7 +171,7 @@ PanelWindow {
             id: leftContent
             anchors.left: parent.left
             anchors.leftMargin: 10
-            anchors.verticalCenter: parent.verticalCenter
+            y: (root.barHeight - height) / 2
             spacing: 0
 
             Rectangle {
@@ -158,7 +207,7 @@ PanelWindow {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onClicked: mouse => {
                         if (mouse.button === Qt.RightButton)
-                            root.launcher.showMessage("Configurator is planned for a later release")
+                            root.aiChatOpened = !root.aiChatOpened
                         else
                             root.launcher.open()
                     }
@@ -222,6 +271,32 @@ PanelWindow {
                     hoverEnabled: true
                     onClicked: root.showFullDate = !root.showFullDate
                 }
+            }
+        }
+
+        Item {
+            x: 0
+            y: root.barHeight
+            width: parent.width
+            height: Math.max(0, parent.height - root.barHeight - 8)
+            clip: true
+
+            ChatPanel {
+                id: chatPanel
+                width: parent.width
+                height: implicitHeight
+                maximumHeight: root.height - root.barHeight - 24
+                openCode: root.openCode
+                visible: parent.height > 0
+                enabled: root.aiChatOpened
+                opacity: root.aiChatOpened ? 1 : 0
+                y: root.aiChatOpened ? 0 : -18
+                scale: root.aiChatOpened ? 1 : 0.985
+                transformOrigin: Item.TopLeft
+                Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 220 : 0; easing.type: Easing.OutCubic } }
+                Behavior on y { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? (root.aiChatOpened ? 420 : 260) : 0; easing.type: root.aiChatOpened ? Easing.OutBack : Easing.OutCubic } }
+                Behavior on scale { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 320 : 0; easing.type: Easing.OutCubic } }
+                onCloseRequested: root.aiChatOpened = false
             }
         }
 

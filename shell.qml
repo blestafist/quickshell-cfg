@@ -12,8 +12,9 @@ ShellRoot {
 
     Services.SystemStats { id: stats }
     Services.Applications { id: applications }
+    Services.OpenCode { id: openCode }
     Launcher.Launcher { id: launcher; applications: applications.applications }
-    Bar.Bar { stats: stats; launcher: launcher; powerOverlay: powerOverlay }
+    Bar.Bar { stats: stats; launcher: launcher; powerOverlay: powerOverlay; openCode: openCode }
     Power.PowerOverlay { id: powerOverlay }
 
     IpcHandler {

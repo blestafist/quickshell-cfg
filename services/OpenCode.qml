@@ -78,10 +78,20 @@ Item {
 
     function setSessionModel(sessionId, model) {
         if (!model || !model.providerID || !model.modelID) return
+        if (!models.some(available => available.providerID === model.providerID && available.modelID === model.modelID)) return
+        savedModel.providerID = model.providerID
+        savedModel.modelID = model.modelID
         replaceSession(sessionId, session => {
             session.model = model
             return session
         })
+    }
+
+    function preferredModel() {
+        return models.find(model => model.providerID === savedModel.providerID && model.modelID === savedModel.modelID)
+            || models.find(model => model.modelID === "kr/claude-sonnet-4.5")
+            || models[0]
+            || null
     }
 
     function loadModels() {
@@ -90,7 +100,7 @@ Item {
             const connected = Array.isArray(data.connected) ? data.connected : []
             const available = []
             for (const provider of data.all) {
-                if (connected.indexOf(provider.id) < 0) continue
+                if (provider.id !== "9router" || connected.indexOf(provider.id) < 0) continue
                 const providerModels = provider.models || {}
                 for (const modelId of Object.keys(providerModels)) {
                     const info = providerModels[modelId] || {}
@@ -103,13 +113,11 @@ Item {
                 }
             }
             models = available
-            const preferred = available.find(model => model.providerID === "9router" && model.modelID === "kr/claude-sonnet-4.5")
-                || available.find(model => model.modelID === "kr/claude-sonnet-4.5")
-                || available[0]
-                || null
+            const preferred = preferredModel()
             if (preferred) {
                 const updated = sessions.map(session => {
-                    if (!session.model) session.model = preferred
+                    const stillAvailable = session.model && available.some(model => model.providerID === session.model.providerID && model.modelID === session.model.modelID)
+                    if (!stillAvailable) session.model = preferred
                     return session
                 })
                 sessions = updated
@@ -154,7 +162,7 @@ Item {
                 title: title,
                 directory: data.directory || cwd,
                 mode: "chat",
-                model: models.length ? models[0] : null,
+                model: preferredModel(),
                 messages: [],
                 busy: false,
                 unread: false,
@@ -401,6 +409,25 @@ Item {
             root.currentRequest = null
             if (request && request.callback) request.callback(code === 0, data)
             Qt.callLater(root.runNextRequest)
+        }
+    }
+
+    FileView {
+        path: Quickshell.statePath("aichat-settings.json")
+        blockLoading: true
+        atomicWrites: true
+        printErrors: false
+        onAdapterUpdated: writeAdapter()
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound) writeAdapter()
+            else console.warn("Cannot load AI chat settings:", error)
+        }
+        onSaveFailed: error => console.warn("Cannot save AI chat settings:", error)
+
+        JsonAdapter {
+            id: savedModel
+            property string providerID: "9router"
+            property string modelID: "kr/claude-sonnet-4.5"
         }
     }
 

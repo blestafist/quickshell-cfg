@@ -28,9 +28,22 @@ PanelWindow {
     property bool vpnOpened: false
     property bool powerOpened: false
     property bool aiChatOpened: false
-    property bool menuOpened: wifiOpened || vpnOpened || powerOpened || aiChatOpened
+    property string islandMode: "music"
+    readonly property bool calculatorOpened: islandMode === "calculator"
+    property bool menuOpened: wifiOpened || vpnOpened || powerOpened || aiChatOpened || calculatorOpened
+    onCalculatorOpenedChanged: {
+        if (calculatorOpened) {
+            wifiOpened = false
+            vpnOpened = false
+            powerOpened = false
+            aiChatOpened = false
+            if (launcher) launcher.close()
+            Qt.callLater(() => calculatorPanel.activate())
+        }
+    }
     onWifiOpenedChanged: {
         if (wifiOpened) {
+            islandMode = "music"
             vpnOpened = false
             powerOpened = false
             aiChatOpened = false
@@ -39,6 +52,7 @@ PanelWindow {
     }
     onVpnOpenedChanged: {
         if (vpnOpened) {
+            islandMode = "music"
             wifiOpened = false
             powerOpened = false
             aiChatOpened = false
@@ -47,6 +61,7 @@ PanelWindow {
     }
     onPowerOpenedChanged: {
         if (powerOpened) {
+            islandMode = "music"
             wifiOpened = false
             vpnOpened = false
             aiChatOpened = false
@@ -55,6 +70,7 @@ PanelWindow {
     }
     onAiChatOpenedChanged: {
         if (aiChatOpened) {
+            islandMode = "music"
             wifiOpened = false
             vpnOpened = false
             powerOpened = false
@@ -64,6 +80,11 @@ PanelWindow {
 
     Services.Wifi { id: wifiService; opened: root.wifiOpened }
     Services.Vpn { id: vpnService; opened: root.vpnOpened }
+    IpcHandler {
+        target: "calculator"
+        function toggle() { root.islandMode = root.calculatorOpened ? "music" : "calculator" }
+        function close() { root.islandMode = "music" }
+    }
     IpcHandler {
         target: "vpn"
         function toggle() { root.vpnOpened = !root.vpnOpened }
@@ -104,12 +125,13 @@ PanelWindow {
     // Keep the layer surface stable; only the island and its input region animate.
     implicitHeight: screen ? screen.height : 1080
     color: "transparent"
-    WlrLayershell.keyboardFocus: menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: calculatorOpened ? WlrKeyboardFocus.Exclusive : menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     mask: Region {
         width: root.width
         height: root.barHeight
         Region { item: leftCluster }
         Region { item: rightCluster }
+        Region { item: musicIsland }
     }
 
     Item {
@@ -305,16 +327,33 @@ PanelWindow {
     Item {
         id: musicIsland
         property real clickScale: 1
-        property real naturalWidth: root.stats.music === "" ? 0 : Math.min(560, musicContent.implicitWidth + 68) + root.joinRadius * 2
+        property real naturalWidth: root.stats.music === "" ? 0 : Math.min(420, musicTitle.implicitWidth) + 94 + root.joinRadius * 2
         property real joinRadius: Math.min(root.joinRadius, width / 4)
         property real bottomRadius: Math.min(root.islandRadius, Math.max(0, width / 2 - joinRadius))
         property color backgroundColor: musicMouse.containsMouse ? Theme.Theme.surfaceHover : Theme.Theme.surfaceRaised
+        property real targetWidth: root.calculatorOpened ? Math.min(600, root.width - 24) : naturalWidth * clickScale
+        property real targetHeight: root.calculatorOpened ? calculatorPanel.implicitHeight : root.barHeight
+
+        function animateSize(animation, propertyName, target) {
+            animation.stop()
+            if (!Config.ShellConfig.animationsEnabled || musicClickAnimation.running) {
+                musicIsland[propertyName] = target
+                return
+            }
+            animation.from = musicIsland[propertyName]
+            animation.to = target
+            animation.duration = root.calculatorOpened ? 380 : 260
+            animation.easing.type = root.calculatorOpened && target > musicIsland[propertyName] ? Easing.OutBack : Easing.OutCubic
+            animation.start()
+        }
+        onTargetWidthChanged: animateSize(islandWidthAnimation, "width", targetWidth)
+        onTargetHeightChanged: animateSize(centerHeightAnimation, "height", targetHeight)
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        width: naturalWidth * clickScale
+        width: 0
         height: root.barHeight
-        opacity: root.stats.music === "" ? 0 : 1
+        opacity: root.calculatorOpened || root.stats.music !== "" ? 1 : 0
         visible: width > 0
         clip: true
 
@@ -362,9 +401,16 @@ PanelWindow {
             }
         }
 
-        Behavior on width {
-            enabled: Config.ShellConfig.animationsEnabled && !musicClickAnimation.running
-            NumberAnimation { duration: 420; easing.type: Easing.OutBack }
+        NumberAnimation {
+            id: islandWidthAnimation
+            target: musicIsland
+            property: "width"
+        }
+
+        NumberAnimation {
+            id: centerHeightAnimation
+            target: musicIsland
+            property: "height"
         }
 
         Behavior on backgroundColor {
@@ -379,7 +425,12 @@ PanelWindow {
 
         Row {
             id: musicContent
-            anchors.centerIn: parent
+            opacity: root.calculatorOpened ? 0 : 1
+            Behavior on opacity {
+                NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 160 : 0 }
+            }
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: (root.barHeight - height) / 2
             spacing: 9
 
             Item {
@@ -413,7 +464,7 @@ PanelWindow {
 
             Text {
                 id: musicTitle
-                width: Math.min(420, implicitWidth)
+                width: Math.max(0, Math.min(420, implicitWidth, musicIsland.width - 92))
                 text: root.stats.music
                 elide: Text.ElideRight
                 color: Theme.Theme.textPrimary
@@ -426,7 +477,9 @@ PanelWindow {
 
         MouseArea {
             id: musicMouse
-            anchors.fill: parent
+            width: parent.width
+            height: root.barHeight
+            enabled: root.stats.music !== "" && !root.calculatorOpened
             hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             onClicked: mouse => {
@@ -434,9 +487,23 @@ PanelWindow {
                     musicNext.running = true
                 else
                     musicToggle.running = true
-                if (Config.ShellConfig.animationsEnabled)
+                if (Config.ShellConfig.animationsEnabled && !root.calculatorOpened)
                     musicClickAnimation.restart()
             }
+        }
+
+        CalculatorPanel {
+            id: calculatorPanel
+            x: root.joinRadius + 20
+            y: 0
+            width: Math.max(0, parent.width - 2 * x)
+            visible: root.calculatorOpened || musicIsland.height > root.barHeight + 1
+            enabled: root.calculatorOpened
+            opacity: root.calculatorOpened ? Math.max(0, Math.min(1, (musicIsland.height - root.barHeight) / (implicitHeight - root.barHeight))) : 0
+            Behavior on opacity {
+                NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 160 : 0 }
+            }
+            onCloseRequested: root.islandMode = "music"
         }
 
         SequentialAnimation {

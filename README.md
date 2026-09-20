@@ -67,6 +67,28 @@ Control the active instance:
 
 ## Hyprland Integration
 
+### Clipboard Island
+
+`Super+C` toggles the horizontal clipboard history in the central island. Scroll
+with the mouse wheel or trackpad, or select with Left/Right. Click or Enter copies
+the original item back to the clipboard without pasting; Escape closes the island.
+Only content cards are shown, with text and image previews. Image previews are
+decoded lazily by cliphist into the same private runtime directory.
+
+Requires `cliphist` and `wl-clipboard` (`sudo pacman -S cliphist wl-clipboard`).
+QuickShell runs `wl-paste --watch cliphist store`; storage and byte-exact decoding
+are handled by cliphist, not by a custom clipboard backend. The private database
+is `$XDG_RUNTIME_DIR/quickshell-clipboard/db`, so history survives shell reloads
+but is removed at reboot or when the user runtime directory is removed at logout.
+Capture starts when QuickShell is running; earlier clipboard contents cannot be
+recovered. History is not restricted to cliphist's default 750 items.
+
+```lua
+hl.bind(mainMod .. " + C", hl.dsp.exec_cmd("qs -p /home/pestit/.config/quickshell ipc call clipboard toggle"))
+```
+
+### Shell Startup
+
 This machine uses `~/.config/hypr/hyprland.lua`, generated with `hyprlang2lua`; edit it as Lua rather than adding a second `hyprland.conf`.
 
 After manually starting QuickShell and confirming the bar appears only on `DP-1`, make these three edits.

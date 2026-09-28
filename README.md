@@ -1,6 +1,6 @@
 # QuickShell for Hyprland
 
-Initial, runnable version of the shell described in `PLAN.md`. It intentionally replaces only the permanent Waybar panel and the application-launcher hotkey first. `hyprlock` remains the lock screen. Rofi, Wlogout, and their Hyprland rules must stay in place until the smoke test is successful.
+Runnable shell described in `PLAN.md`, with an independent Quickshell session locker (`lock.qml`, widgets under `lockscreen/`). Locking uses Wayland ext-session-lock-v1 and PAM, not the decorative power overlay. See [locker validation and limitations](docs/lockscreen.md) before the first live use.
 
 ## What Is Implemented
 
@@ -23,6 +23,9 @@ quickshell 0.3.1
 hyprland 0.56.2
 wpctl (WirePlumber/PipeWire)
 nmcli (NetworkManager)
+bash, flock, timeout, realpath  # lockctl
+systemctl                      # guarded suspend
+/etc/pam.d/hyprlock             # PAM service supplied by hyprlock
 ```
 
 Recommended or optional:
@@ -123,9 +126,29 @@ Reload the Lua configuration through the normal Hyprland reload flow, then eithe
 3. Reload Hyprland; stop the old Waybar process only after confirming QuickShell is visible.
 4. Preserve both `namespace = "rofi"` and `namespace = "waybar"` layer rules during the first login using QuickShell.
 5. After a clean login with the new shell, remove the old Rofi and Waybar layer rules from `hyprland.lua` if those programs are no longer used.
-6. Keep `hyprlock`; the shell calls it but never implements locking itself.
+6. Keep `hyprlock` installed: the locker uses its system PAM service, and it remains an alternative before acquiring a custom lock.
 
-`Super+S` continues to invoke `wlogout` for now. The button and a confirmed QuickShell power menu are intentionally deferred, so removing Wlogout at this point would remove a working session action.
+### Lockscreen Status
+
+The broken prototype has been replaced. `lockctl` starts an independent, non-auto-reloading locker and waits for its read-only IPC status to report compositor acknowledgement. The locker remains resident without windows after successful PAM authentication, allowing the Wayland unlock request to flush without a process-exit race. There is no unlock IPC.
+
+```sh
+~/.config/quickshell/scripts/lockctl lock
+# Only suspends after compositor acknowledgement and a second in-process check:
+~/.config/quickshell/scripts/lockctl lock-and-suspend
+# Read-only; does not start a locker:
+~/.config/quickshell/scripts/lockctl status
+```
+
+After the isolated smoke checklist in [docs/lockscreen.md](docs/lockscreen.md), the optional Hyprland binding is:
+
+```lua
+hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("~/.config/quickshell/scripts/lockctl lock"))
+```
+
+Launcher and shell power-menu lock/suspend actions use `lockctl`. External Hyprland configuration was not changed. This does not protect suspend initiated elsewhere, including lid events, idle daemons, or direct `systemctl suspend`. No real-session lock, PAM authentication, or suspend has been runtime-verified by the non-live tests.
+
+`Super+S` may still invoke `wlogout` through the existing external binding; its actions are outside this integration.
 
 ## Smoke Test
 

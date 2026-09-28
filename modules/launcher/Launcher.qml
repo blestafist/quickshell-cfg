@@ -19,7 +19,7 @@ PanelWindow {
     property var applications: []
     property var commands: [
         { kind: "command", name: "Terminal", description: "Open Kitty", keywords: "shell console kitty", icon: "", command: Config.ShellConfig.terminalCommand },
-        { kind: "command", name: "Lock screen", description: "Lock with hyprlock", keywords: "session security", icon: "󰌾", command: "hyprlock" },
+        { kind: "command", name: "Lock screen", description: "Lock the session", keywords: "session security", icon: "󰌾", command: "~/.config/quickshell/scripts/lockctl lock" },
         { kind: "command", name: "Reload shell", description: "Restart QuickShell configuration", keywords: "quickshell config", icon: "󰑓", command: "~/.config/quickshell/scripts/shellctl reload" },
         { kind: "category", name: "Hidden", description: "Hidden entries - Ctrl+H to restore", keywords: "hidden hide скрытые", icon: "󰈉" }
     ]

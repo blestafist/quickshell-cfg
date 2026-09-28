@@ -27,13 +27,13 @@ Scope {
     function runPendingAction() {
         switch (pendingAction) {
         case "lock":
-            actionProcess.command = ["hyprlock"]
+            actionProcess.command = [Quickshell.env("HOME") + "/.config/quickshell/scripts/lockctl", "lock"]
             break
         case "shutdown":
             actionProcess.command = ["systemctl", "poweroff"]
             break
         case "suspend":
-            actionProcess.command = ["sh", "-c", "hyprlock & lock_pid=$!; sleep 0.35; systemctl suspend -i; wait \"$lock_pid\""]
+            actionProcess.command = [Quickshell.env("HOME") + "/.config/quickshell/scripts/lockctl", "lock-and-suspend"]
             break
         case "reboot":
             actionProcess.command = ["systemctl", "reboot"]

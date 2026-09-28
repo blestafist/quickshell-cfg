@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root=$(realpath -- "$(dirname -- "${BASH_SOURCE[0]}")/..")
+config="$root/lock.qml"
+action=${1:-}
+case "$action" in
+    lock|wait|lock-and-suspend|status) ;;
+    *) printf '%s\n' 'Usage: lockctl {lock|wait|lock-and-suspend|status}' >&2; exit 2 ;;
+esac
+
+ipc() { timeout 3s quickshell --no-color ipc -p "$config" call locker "$@"; }
+if [[ $action == status ]]; then ipc status; exit; fi
+
+: "${XDG_RUNTIME_DIR:?A private XDG_RUNTIME_DIR is required}"
+[[ -d $XDG_RUNTIME_DIR && -O $XDG_RUNTIME_DIR && $(stat -c %a "$XDG_RUNTIME_DIR") == 700 ]] || exit 1
+[[ -n ${WAYLAND_DISPLAY:-} ]] || { printf '%s\n' 'lockctl: Wayland session required' >&2; exit 1; }
+umask 077
+# This file is only an advisory mutex, never evidence of a secure session.
+exec 9>"$XDG_RUNTIME_DIR/quickshell-lockctl.mutex"
+flock -w 20 9 || { printf '%s\n' 'lockctl: another request is still in progress' >&2; exit 1; }
+
+if [[ $action != wait ]]; then
+    # Detached locker survives the shell's Process object and shell reloads.
+    QS_DISABLE_FILE_WATCHER=1 quickshell -p "$config" -n -d 9>&-
+    [[ $(ipc lock) == true ]] || { printf '%s\n' 'lockctl: locker is busy; retry after unlock' >&2; exit 1; }
+fi
+
+deadline=$((SECONDS + 15))
+while :; do
+    state=$(ipc status 2>/dev/null) || state=unavailable
+    [[ $state == secure ]] && break
+    case "$state" in
+        idle|unlocking|suspending) printf 'lockctl: not secure (%s)\n' "$state" >&2; exit 1 ;;
+    esac
+    (( SECONDS < deadline )) || { printf '%s\n' 'lockctl: secure acknowledgement timed out; locker left untouched' >&2; exit 1; }
+    sleep 0.05 # Poll pacing only; elapsed time never authorizes suspend.
+done
+
+if [[ $action == lock-and-suspend ]]; then
+    [[ $(ipc suspend) == true ]] || { printf '%s\n' 'lockctl: suspend refused by locker' >&2; exit 1; }
+    deadline=$((SECONDS + 120))
+    while :; do
+        result=$(ipc suspendStatus) || exit 1
+        [[ $result == done ]] && break
+        [[ $result == pending ]] || { printf '%s\n' 'lockctl: suspend failed; session remains locked' >&2; exit 1; }
+        (( SECONDS < deadline )) || exit 1
+        sleep 0.1
+    done
+fi

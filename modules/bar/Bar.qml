@@ -711,6 +711,6 @@ PanelWindow {
     Process { id: volumeDown; command: ["wpctl", "set-volume", "@DEFAULT_AUDIO_SINK@", "5%-"] }
     Process { id: musicToggle; command: ["playerctl", "play-pause"] }
     Process { id: musicNext; command: ["playerctl", "next"] }
-    Process { id: layoutSwitch; command: ["hyprctl", "switchxkblayout", "current", "next"] }
+    Process { id: layoutSwitch; command: ["niri", "msg", "action", "switch-layout", "next"] }
     Timer { interval: 1000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.currentTime = new Date() }
 }

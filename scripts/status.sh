@@ -36,7 +36,7 @@ case "${1:-}" in
         wpctl get-volume @DEFAULT_AUDIO_SINK@ 2>/dev/null | awk '{ muted = ($3 == "[MUTED]"); printf "%d|%d\n", $2 * 100, muted }' || printf '%s\n' '0|1'
         ;;
     layout)
-        hyprctl devices -j 2>/dev/null | jq -r '.keyboards[] | select(.main == true) | .active_keymap' | head -n1
+        niri msg -j keyboard-layouts 2>/dev/null | python3 -c 'import json, sys; layouts = json.load(sys.stdin); print(layouts["names"][layouts["current_idx"]] or "--")'
         ;;
     *)
         printf '%s\n' "Usage: $(basename "$0") {resources|network|audio|layout}" >&2

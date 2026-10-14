@@ -51,14 +51,14 @@ case "${1:-}" in
         status=0
         printf '%s\n' 'Required:'
         require_command qs || status=1
-        require_command hyprctl || status=1
+        require_command niri || status=1
+        require_command python3 || status=1
         require_command wpctl || status=1
         require_command nmcli || status=1
         printf '%s\n' 'Optional:'
         require_command nvidia-smi || true
         require_command swww || true
         require_command matugen || true
-        require_command jq || true
         exit "$status"
         ;;
     *)

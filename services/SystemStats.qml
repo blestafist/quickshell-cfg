@@ -1,6 +1,5 @@
 import QtQuick
 import Quickshell.Io
-import Quickshell.Hyprland
 
 Item {
     id: root
@@ -14,6 +13,7 @@ Item {
     property string network: "Offline"
     property string signal: ""
     property string keyboardLayout: "--"
+    property var keyboardLayoutNames: []
     property string music: ""
     property bool musicPlaying: false
 
@@ -64,9 +64,17 @@ Item {
 
     Process {
         id: layoutProcess
-        command: ["sh", "-c", "~/.config/quickshell/scripts/status.sh layout"]
+        command: ["niri", "msg", "-j", "keyboard-layouts"]
         stdout: SplitParser {
-            onRead: data => root.keyboardLayout = data.trim() || "--"
+            onRead: data => {
+                try {
+                    const layouts = JSON.parse(data)
+                    root.keyboardLayoutNames = layouts.names
+                    root.keyboardLayout = layouts.names[layouts.current_idx] || "--"
+                } catch (error) {
+                    console.warn("Invalid niri keyboard layouts:", error)
+                }
+            }
         }
     }
 
@@ -101,17 +109,31 @@ Item {
         }
     }
 
-    Connections {
-        target: Hyprland
-        function onRawEvent(event) {
-            if (event.name === "activelayout")
-                root.run(layoutProcess)
+    Process {
+        id: compositorEvents
+        command: ["niri", "msg", "-j", "event-stream"]
+        running: true
+        stdout: SplitParser {
+            onRead: data => {
+                try {
+                    const event = JSON.parse(data)
+                    if (event.KeyboardLayoutsChanged) {
+                        const layouts = event.KeyboardLayoutsChanged.keyboard_layouts
+                        root.keyboardLayoutNames = layouts.names
+                        root.keyboardLayout = layouts.names[layouts.current_idx] || "--"
+                    } else if (event.KeyboardLayoutSwitched) {
+                        root.keyboardLayout = root.keyboardLayoutNames[event.KeyboardLayoutSwitched.idx] || "--"
+                    }
+                } catch (error) {
+                    console.warn("Invalid niri event:", error)
+                }
+            }
         }
     }
 
     Timer { interval: 4000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.run(resourcesProcess) }
     Timer { interval: 30000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.run(networkProcess) }
     Timer { interval: 30000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.run(audioProcess) }
-    Timer { interval: 30000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.run(layoutProcess) }
+    Timer { interval: 3000; running: true; repeat: true; triggeredOnStart: true; onTriggered: root.run(layoutProcess) }
 
 }

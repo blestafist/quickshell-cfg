@@ -1,4 +1,4 @@
-# QuickShell for Hyprland
+# QuickShell for niri
 
 Runnable shell described in `PLAN.md`, with an independent Quickshell session locker (`lock.qml`, widgets under `lockscreen/`). Locking uses Wayland ext-session-lock-v1 and PAM, not the decorative power overlay. See [locker validation and limitations](docs/lockscreen.md) before the first live use.
 
@@ -20,7 +20,8 @@ Required at runtime:
 
 ```text
 quickshell 0.3.1
-hyprland 0.56.2
+niri
+python3                        # status script keyboard layout parsing
 wpctl (WirePlumber/PipeWire)
 nmcli (NetworkManager)
 bash, flock, timeout, realpath  # lockctl
@@ -32,7 +33,6 @@ Recommended or optional:
 
 ```text
 JetBrainsMono Nerd Font
-jq                 # more accurate keyboard layout parsing
 nvidia-smi         # NVIDIA GPU utilization
 swww and matugen   # wallpaper and palette workflow
 ```
@@ -45,7 +45,7 @@ Check the local environment:
 
 ## Run And Control
 
-Start without changing Hyprland first, from an existing graphical Hyprland session:
+Start from an existing graphical niri session:
 
 ```sh
 qs -p ~/.config/quickshell
@@ -68,7 +68,31 @@ Control the active instance:
 
 `qs -p ~/.config/quickshell` is deliberate. This directory contains `shell.qml`, so QuickShell registers it as the default configuration. Supplying the path makes scripts independent of a changed `XDG_CONFIG_HOME`.
 
-## Hyprland Integration
+## niri Integration
+
+The active compositor configuration is `~/.config/niri/config.kdl`:
+
+- Startup runs `scripts/shellctl start`, avoiding duplicate shell instances.
+- `Super+R`: launcher; `Super+C`: clipboard; `Super+X`: calculator.
+- `Super+S`: power menu; `Super+Alt+L`: independent QuickShell locker.
+- Niri's center-column action is on `Super+Alt+C`; directional navigation is unchanged.
+
+Keyboard state comes from `niri msg -j keyboard-layouts`, with event-stream
+updates and a three-second polling fallback. Clicking the layout indicator runs
+`niri msg action switch-layout next`. Configure available layouts in niri's
+`input.keyboard.xkb` section; a single configured layout cannot cycle to another.
+The power menu's logout action exits niri.
+
+The locker continues to use `/etc/pam.d/hyprlock`; that PAM service is independent
+of the compositor. Keep the package installed. Migration does not verify live
+locking, authentication, or suspend; see the lockscreen smoke checklist before use.
+
+Validate with `niri validate` and `scripts/shellctl diagnostics`. Use
+`niri msg outputs` to check connector names and `niri msg layers` to check the bar.
+
+## Historical Hyprland Integration
+
+The following instructions describe the previous setup, not the active backend.
 
 ### Clipboard Island
 
@@ -158,12 +182,12 @@ Launcher and shell power-menu lock/suspend actions use `lockctl`. External Hyprl
 4. Change keyboard layout and check the bar within three seconds.
 5. Disconnect and reconnect a network; check the connection label.
 6. Change volume with media keys; check the volume value.
-7. Run `shellctl reload`; the bar must return without restarting Hyprland.
+7. Run `shellctl reload`; the bar must return without restarting niri.
 8. On an NVIDIA system, check that utilization is shown; otherwise `N/A` is expected and non-fatal.
 
 ## Configuration
 
-`config/MachineConfig.qml` contains output names. Change it only if `hyprctl monitors` reports different names.
+`config/MachineConfig.qml` contains output names. Change it only if `niri msg outputs` reports different names.
 
 `config/ShellConfig.qml` contains bar geometry, launcher dimensions, clock format, animations flag, and application command strings. This is the user-facing configuration surface for the current release.
 
@@ -182,8 +206,8 @@ The script validates dependencies, sets the wallpaper, runs `matugen image ... -
 ## Troubleshooting
 
 - `shellctl open` cannot connect: start the shell with `shellctl start` or `qs -p ~/.config/quickshell` from the graphical session.
-- Bar is missing: run `hyprctl monitors` and compare the exact connector name with `MachineConfig.qml`.
-- All values show fallback data: ensure `wpctl`, `nmcli`, and `hyprctl` work in the Hyprland user session; run `shellctl diagnostics`.
-- Keyboard layout is `--`: install `jq`, or use the displayed fallback while the service is extended.
+- Bar is missing: run `niri msg outputs` and compare the exact connector name with `MachineConfig.qml`.
+- All values show fallback data: ensure `wpctl`, `nmcli`, and `niri msg keyboard-layouts` work in the niri user session; run `shellctl diagnostics`.
+- Keyboard layout is `--`: check `niri msg -j keyboard-layouts` and the Quickshell logs. The bar parses JSON directly without `jq`.
 - Launcher opens but cannot execute a command: adjust the command in `ShellConfig.qml`; verify it in a terminal first.
 - Need logs: run `qs log` while the shell instance is running.

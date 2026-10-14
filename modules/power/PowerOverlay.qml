@@ -39,7 +39,7 @@ Scope {
             actionProcess.command = ["systemctl", "reboot"]
             break
         case "logout":
-            actionProcess.command = ["hyprctl", "dispatch", "exit", "0"]
+            actionProcess.command = ["niri", "msg", "action", "quit", "--skip-confirmation"]
             break
         default:
             presented = false

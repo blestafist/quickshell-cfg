@@ -107,6 +107,38 @@ TestCase {
         tryCompare(item, "presented", false, 1200)
     }
 
+    function test_mouseWheelSmallDeltasSelectNeighbour() {
+        const item = picker()
+        item.open()
+        const wheel = {device: {deviceType: PointerDevice.Mouse}, pixelDelta: Qt.point(0, -1),
+            angleDelta: Qt.point(0, -1), accepted: false}
+        item.scrollGallery(wheel)
+        compare(item.selectedIndex, 3)
+        compare(wheel.accepted, true)
+        item.scrollGallery(wheel)
+        compare(item.selectedIndex, 4)
+        wheel.angleDelta = Qt.point(0, 0)
+        wheel.pixelDelta = Qt.point(1, 0)
+        item.scrollGallery(wheel)
+        compare(item.selectedIndex, 3)
+        item.select(0)
+        item.scrollGallery(wheel)
+        compare(item.selectedIndex, 0)
+        item.close()
+    }
+
+    function test_touchpadKeepsSmoothPixelScrolling() {
+        const item = picker()
+        item.open()
+        const wheel = {device: {deviceType: PointerDevice.TouchPad}, pixelDelta: Qt.point(0, -10),
+            angleDelta: Qt.point(0, -1), accepted: false}
+        item.scrollGallery(wheel)
+        verify(item.position > 2 && item.position < 3)
+        compare(item.selectedIndex, 2)
+        compare(wheel.accepted, true)
+        item.close()
+    }
+
     function test_boundedDelegatesWithHugeCollectionAndNoWrapAtEdges() {
         const item = picker(10000)
         item.open()

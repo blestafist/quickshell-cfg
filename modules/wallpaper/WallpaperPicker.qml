@@ -147,6 +147,29 @@ FocusScope {
         select((Math.max(0, selectedIndex) + 1 + Math.floor(Math.random() * (entries.length - 1))) % entries.length)
     }
 
+    function scrollGallery(wheel) {
+        if (!entries.length || busy) return
+        const pixels = wheel.pixelDelta.x || wheel.pixelDelta.y
+        const angle = wheel.angleDelta.x || wheel.angleDelta.y
+        // Some mice report pixel deltas as well as wheel ticks. Treat those as
+        // discrete steps rather than waiting for half a card's worth of pixels.
+        if (pixels && wheel.device && wheel.device.deviceType === PointerDevice.TouchPad) {
+            scrollClock.running = false
+            longTravel.stop()
+            travelOpacity = 1
+            velocity = 0
+            position = Motion.clamp(position - pixels / (baseWidth + cardGap), 0, entries.length - 1)
+            snap.restart()
+        } else {
+            const delta = angle || pixels
+            if (delta) {
+                snap.stop()
+                select(selectedIndex - Math.sign(delta))
+            }
+        }
+        wheel.accepted = true
+    }
+
     function applyCurrent() {
         if (!selected || busy) return
         if (longTravel.running) {
@@ -411,22 +434,7 @@ FocusScope {
             MouseArea {
                 anchors.fill: parent
                 acceptedButtons: Qt.NoButton
-                onWheel: wheel => {
-                    if (!root.entries.length) return
-                    if (wheel.pixelDelta.x || wheel.pixelDelta.y) {
-                        scrollClock.running = false
-                        longTravel.stop()
-                        root.travelOpacity = 1
-                        root.velocity = 0
-                        root.position = Motion.clamp(root.position - (wheel.pixelDelta.x || wheel.pixelDelta.y)
-                            / (root.baseWidth + root.cardGap), 0, root.entries.length - 1)
-                        snap.restart()
-                    } else {
-                        const delta = wheel.angleDelta.x || wheel.angleDelta.y
-                        if (delta) root.select(root.selectedIndex - Math.sign(delta))
-                    }
-                    wheel.accepted = true
-                }
+                onWheel: wheel => root.scrollGallery(wheel)
             }
             Timer { id: snap; interval: 140; onTriggered: root.select(Math.round(root.position)) }
 

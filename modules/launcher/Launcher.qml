@@ -31,6 +31,7 @@ PanelWindow {
     property bool showingHidden: false
 
     property var targetScreen: null
+    property string launchOutputName: ""
     screen: targetScreen
     visible: presented && targetScreen !== null
     anchors { top: true; bottom: true; left: true; right: true }
@@ -66,9 +67,10 @@ PanelWindow {
             return
         let name = ""
         try { name = JSON.parse(output).name } catch (error) {}
-        targetScreen = Quickshell.screens.find(screen => screen.name === name)
-            || Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
+        const focusedScreen = Quickshell.screens.find(screen => screen.name === name)
+        targetScreen = Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
             || Quickshell.screens[0] || null
+        launchOutputName = focusedScreen ? focusedScreen.name : targetScreen ? targetScreen.name : ""
         if (!targetScreen) {
             openingRequested = false
             return
@@ -196,9 +198,9 @@ PanelWindow {
             ? ["gio", "launch", item.desktopFile] : ["sh", "-c", item.command]
         // Release exclusive keyboard focus before spawning. Restore the output
         // selected at opening so Niri places the new window on that monitor.
-        if (Quickshell.env("NIRI_SOCKET") && targetScreen)
+        if (Quickshell.env("NIRI_SOCKET") && launchOutputName)
             command = ["sh", "-c", 'niri msg action focus-monitor "$1" >/dev/null && shift && exec "$@"',
-                "launcher", targetScreen.name].concat(command)
+                "launcher", launchOutputName].concat(command)
         pendingCommand = command
         close()
     }

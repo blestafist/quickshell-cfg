@@ -22,7 +22,7 @@ function context() {
     const queued = [];
     const s = {
         opened: false, presented: false, openingRequested: false,
-        targetScreen: null, message: '', showingHidden: false, pendingCommand: [],
+        targetScreen: null, launchOutputName: '', message: '', showingHidden: false, pendingCommand: [],
         Config: {MachineConfig: {primaryMonitor: primary.name}},
         Quickshell: {screens: [primary, secondary], env: () => '/run/niri.sock'},
         Qt: {callLater: fn => queued.push(fn)},
@@ -37,13 +37,14 @@ function context() {
     return s;
 }
 
-test('launcher resolves focused output before mapping and focuses search after mapping', () => {
+test('launcher stays on primary, remembers focused output for launch and focuses search after mapping', () => {
     const s = context();
     s.open();
     assert.equal(s.focusedOutput.running, true);
     assert.equal(s.presented, false);
     s.finishOpen('{"name":"HDMI-A-1"}');
-    assert.equal(s.targetScreen, s.secondary);
+    assert.equal(s.targetScreen, s.primary);
+    assert.equal(s.launchOutputName, s.secondary.name);
     assert.equal(s.presented, true);
     assert.equal(s.opened, false);
     s.queued.shift()();
@@ -88,7 +89,8 @@ test('close before deferred opening cannot revive the launcher', () => {
 
 test('application launch waits for dismissal and retains output and quoted desktop path', () => {
     const s = context();
-    s.targetScreen = s.secondary;
+    s.targetScreen = s.primary;
+    s.launchOutputName = s.secondary.name;
     s.opened = s.presented = s.openingRequested = true;
     s.activate({kind: 'application', desktopFile: '/apps/My App.desktop'});
     assert.equal(s.commandRunner.starts, 0);

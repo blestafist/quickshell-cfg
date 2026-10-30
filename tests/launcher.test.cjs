@@ -126,10 +126,10 @@ test('launcher uses overlay exclusive focus throughout presentation', () => {
     assert.match(source, /WlrLayershell.keyboardFocus: presented \? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None/);
 });
 
-test('reveal bounces only on opening, with bounded shape morph and reduced-motion support', () => {
-    assert.match(source, /property real progress: Math.max\(0, Math.min\(1, reveal\)\)/);
-    const reveal = source.slice(source.indexOf('Behavior on reveal'), source.indexOf('Behavior on height'));
-    assert.match(reveal, /enabled: Config.ShellConfig.animationsEnabled/);
-    assert.match(reveal, /duration: root.opened \? 420 : 280/);
-    assert.match(reveal, /easing.type: root.opened \? Easing.OutBack : Easing.OutCubic/);
+test('liquid shell preserves full-size content, reduced motion and dismissal lifecycle', () => {
+    assert.match(source, /LiquidSurface \{/);
+    assert.match(source, /expanded: root.opened/);
+    assert.match(source, /animationsEnabled: Config.ShellConfig.animationsEnabled/);
+    assert.match(source, /onCollapsed:.*if \(!root.opened\) root.presented = false/);
+    assert.doesNotMatch(source, /transform: Scale|Behavior on reveal/);
 });

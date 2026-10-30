@@ -1,13 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
 import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 
 import "../../config" as Config
 import "../../theme" as Theme
+import "LiquidMotion.js" as Motion
 
 PanelWindow {
     id: root
@@ -91,7 +91,7 @@ PanelWindow {
     function close() {
         openingRequested = false
         opened = false
-        if (sheet.reveal === 0)
+        if (!sheet.animating && sheet.reveal === 0)
             presented = false
     }
 
@@ -262,99 +262,41 @@ PanelWindow {
         onSaveFailed: error => console.warn("Cannot save hidden launcher entries:", error)
     }
 
-    Item {
+    LiquidSurface {
         id: sheet
 
         readonly property int padding: 12
-        readonly property int frameInset: 36
-        readonly property real progress: Math.max(0, Math.min(1, reveal))
-        readonly property real frameFlare: 36 + 32 * (1 - progress)
-        readonly property real frameTopRadius: Math.max(0, Math.min(width / 2 - frameFlare, 40 + 100 * (1 - progress)))
-        property real reveal: root.opened ? 1 : 0
-        readonly property real swell: Math.sin(progress * Math.PI)
         readonly property int rowHeight: 72
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 6)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
 
         z: 1
         width: Math.min(Config.ShellConfig.launcherWidth + frameInset * 2, parent.width - 24)
-        height: Math.min(Config.ShellConfig.launcherHeight, listHeight + 76, parent.height - Config.ShellConfig.launcherBottomMargin - frameInset - 12)
+        height: Math.max(0, Math.min(Config.ShellConfig.launcherHeight, listHeight + 76,
+            parent.height - Config.ShellConfig.launcherBottomMargin - frameInset - 12)) + bottomInset
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
+        bottomInset: Config.ShellConfig.launcherBottomMargin
+        expanded: root.opened
+        animationsEnabled: Config.ShellConfig.animationsEnabled
+        surfaceColor: Theme.Theme.surface
         enabled: root.opened
         visible: root.presented
-        // Keep the entire surface attached to the screen edge throughout the morph.
-        transform: Scale {
-            origin.x: sheet.width / 2
-            origin.y: sheet.height + Config.ShellConfig.launcherBottomMargin
-            xScale: 0.18 + 0.82 * sheet.reveal - 0.10 * sheet.swell
-            yScale: sheet.reveal + 0.12 * sheet.swell
-        }
-
-        onRevealChanged: {
-            if (reveal === 0 && !root.opened)
-                root.presented = false
-        }
-
-        Behavior on reveal {
-            enabled: Config.ShellConfig.animationsEnabled
-            NumberAnimation {
-                duration: root.opened ? 420 : 280
-                easing.type: root.opened ? Easing.OutBack : Easing.OutCubic
-                easing.overshoot: 1.1
-            }
-        }
+        onCollapsed: { if (!root.opened) root.presented = false }
 
         Behavior on height {
-            enabled: Config.ShellConfig.animationsEnabled && root.opened && sheet.reveal === 1
+            enabled: Config.ShellConfig.animationsEnabled && root.presented && root.opened
             NumberAnimation {
-                duration: 320
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.22, 0.72, 0.18, 1, 1, 1]
-            }
-        }
-
-        Shape {
-            id: outerFrame
-            x: 0
-            y: 0
-            width: parent.width
-            height: parent.height + Config.ShellConfig.launcherBottomMargin
-            z: -1
-            preferredRendererType: Shape.CurveRenderer
-
-            ShapePath {
-                readonly property real f: sheet.frameFlare
-                readonly property real r: sheet.frameTopRadius
-                readonly property real w: outerFrame.width
-                readonly property real h: outerFrame.height
-                id: outline
-                strokeWidth: 0
-                fillColor: Theme.Theme.surface
-                startX: f + r
-                startY: 0
-                PathLine { x: outline.w - outline.f - outline.r; y: 0 }
-                PathQuad { x: outline.w - outline.f; y: outline.r; controlX: outline.w - outline.f; controlY: 0 }
-                PathLine { x: outline.w - outline.f; y: outline.h - outline.f }
-                PathCubic {
-                    x: outline.w; y: outline.h
-                    control1X: outline.w - outline.f; control1Y: outline.h - outline.f * 0.35
-                    control2X: outline.w - outline.f * 0.65; control2Y: outline.h
-                }
-                PathLine { x: 0; y: outline.h }
-                PathCubic {
-                    x: outline.f; y: outline.h - outline.f
-                    control1X: outline.f * 0.65; control1Y: outline.h
-                    control2X: outline.f; control2Y: outline.h - outline.f * 0.35
-                }
-                PathLine { x: outline.f; y: outline.r }
-                PathQuad { x: outline.f + outline.r; y: 0; controlX: outline.f; controlY: 0 }
+                duration: 260
+                easing.type: Easing.OutCubic
             }
         }
 
         Item {
             id: listSurface
+            readonly property real entrance: Motion.smoothstep(0.42, 0.96, sheet.contentProgress)
+            opacity: entrance
+            transform: Translate { y: (1 - listSurface.entrance) * 12 }
             anchors { top: parent.top; left: parent.left; right: parent.right; bottom: search.top; bottomMargin: 12 }
             anchors.leftMargin: sheet.frameInset
             anchors.rightMargin: sheet.frameInset
@@ -382,11 +324,10 @@ PanelWindow {
                     y: resultList.currentItem ? resultList.currentItem.y : 0
 
                     Behavior on y {
-                        enabled: Config.ShellConfig.animationsEnabled
+                        enabled: Config.ShellConfig.animationsEnabled && root.opened
                         NumberAnimation {
-                            duration: 220
-                            easing.type: Easing.BezierSpline
-                            easing.bezierCurve: [0.2, 0.8, 0.2, 1, 1, 1]
+                            duration: 150
+                            easing.type: Easing.OutCubic
                         }
                     }
                 }
@@ -550,6 +491,7 @@ PanelWindow {
 
         TextField {
             id: search
+            opacity: Motion.smoothstep(0.18, 0.78, sheet.contentProgress)
             focus: true
             height: 64
             anchors { left: parent.left; right: parent.right; bottom: parent.bottom }

@@ -124,11 +124,33 @@ PanelWindow {
 
     Item {
         id: leftCluster
+        property real targetWidth: leftContent.width + root.edgeRadius + 18
+
+        function animateWidth() {
+            leftIslandWidthAnimation.stop()
+            if (!Config.ShellConfig.animationsEnabled) {
+                width = targetWidth
+                return
+            }
+            const growing = targetWidth > width
+            leftIslandWidthAnimation.from = width
+            leftIslandWidthAnimation.to = targetWidth
+            leftIslandWidthAnimation.duration = growing ? 420 : 280
+            leftIslandWidthAnimation.easing.type = growing ? Easing.OutBack : Easing.OutCubic
+            leftIslandWidthAnimation.start()
+        }
+        onTargetWidthChanged: animateWidth()
 
         anchors.left: parent.left
         anchors.top: parent.top
-        width: leftContent.width + root.edgeRadius + 18
+        width: 0
         height: root.barHeight
+
+        NumberAnimation {
+            id: leftIslandWidthAnimation
+            target: leftCluster
+            property: "width"
+        }
 
         Shape {
             width: parent.width + root.joinRadius
@@ -464,29 +486,24 @@ PanelWindow {
         // Properties
         property real powerButtonIconOffsetX: -6
         property real powerButtonIconOffsetY: 0
-        readonly property bool expanded: root.wifiOpened || root.vpnOpened || root.powerOpened
-        property real targetWidth: root.wifiOpened || root.vpnOpened ? Math.min(root.width, Math.max(600, rightContent.width + 64)) : root.powerOpened ? Math.max(344, rightContent.width + 20) : rightContent.width + 20
         property real targetHeight: root.barHeight + (root.wifiOpened ? wifiPanel.implicitHeight : root.vpnOpened ? vpnPanel.implicitHeight : root.powerOpened ? powerPanel.implicitHeight : 0)
-
-        function animateSize(animation, propertyName, target) {
-            animation.stop()
+        onTargetHeightChanged: {
+            islandHeightAnimation.stop()
             if (!Config.ShellConfig.animationsEnabled) {
-                rightCluster[propertyName] = target
+                height = targetHeight
                 return
             }
-            const growing = expanded && target > rightCluster[propertyName]
-            animation.from = rightCluster[propertyName]
-            animation.to = target
-            animation.duration = growing ? 420 : 280
-            animation.easing.type = growing ? Easing.OutBack : Easing.OutCubic
-            animation.start()
+            islandHeightAnimation.from = height
+            islandHeightAnimation.to = targetHeight
+            islandHeightAnimation.duration = root.menuOpened ? 420 : 280
+            islandHeightAnimation.easing.type = targetHeight > height ? Easing.OutBack : Easing.OutCubic
+            islandHeightAnimation.start()
         }
-        onTargetWidthChanged: animateSize(islandWidthAnimationRight, "width", targetWidth)
-        onTargetHeightChanged: animateSize(islandHeightAnimation, "height", targetHeight)
+
 
         anchors.right: parent.right
         anchors.top: parent.top
-        width: 0
+        width: root.wifiOpened || root.vpnOpened ? Math.min(root.width, Math.max(600, rightContent.width + 64)) : root.powerOpened ? Math.max(344, rightContent.width + 20) : rightContent.width + 20
         height: root.barHeight
 
         NumberAnimation {
@@ -495,10 +512,9 @@ PanelWindow {
             property: "height"
         }
 
-        NumberAnimation {
-            id: islandWidthAnimationRight
-            target: rightCluster
-            property: "width"
+        Behavior on width {
+            enabled: Config.ShellConfig.animationsEnabled
+            NumberAnimation { duration: root.menuOpened ? 420 : 280; easing.type: root.menuOpened ? Easing.OutBack : Easing.OutCubic }
         }
 
         Shape {

@@ -8,6 +8,7 @@ import "../../components" as Components
 import "../../config" as Config
 import "../../theme" as Theme
 import "../../services" as Services
+import "../wallpaper" as Wallpaper
 
 PanelWindow {
     id: root
@@ -15,6 +16,7 @@ PanelWindow {
     property var stats
     property var launcher
     property var powerOverlay
+    property var paletteController
     property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
     property date currentTime: new Date()
     property int barHeight: 42
@@ -30,9 +32,11 @@ PanelWindow {
     readonly property bool calculatorOpened: islandMode === "calculator"
     readonly property bool clipboardOpened: islandMode === "clipboard"
     readonly property bool centerExpanded: calculatorOpened || clipboardOpened
-    property bool menuOpened: wifiOpened || vpnOpened || powerOpened || centerExpanded
+    readonly property bool wallpaperOpened: wallpaperPicker.opened
+    property bool menuOpened: wifiOpened || vpnOpened || powerOpened || centerExpanded || wallpaperOpened
     onClipboardOpenedChanged: {
         if (clipboardOpened) {
+            wallpaperPicker.close()
             wifiOpened = false
             vpnOpened = false
             powerOpened = false
@@ -42,6 +46,7 @@ PanelWindow {
     }
     onCalculatorOpenedChanged: {
         if (calculatorOpened) {
+            wallpaperPicker.close()
             wifiOpened = false
             vpnOpened = false
             powerOpened = false
@@ -51,6 +56,7 @@ PanelWindow {
     }
     onWifiOpenedChanged: {
         if (wifiOpened) {
+            wallpaperPicker.close()
             islandMode = "music"
             vpnOpened = false
             powerOpened = false
@@ -59,6 +65,7 @@ PanelWindow {
     }
     onVpnOpenedChanged: {
         if (vpnOpened) {
+            wallpaperPicker.close()
             islandMode = "music"
             wifiOpened = false
             powerOpened = false
@@ -67,6 +74,7 @@ PanelWindow {
     }
     onPowerOpenedChanged: {
         if (powerOpened) {
+            wallpaperPicker.close()
             islandMode = "music"
             wifiOpened = false
             vpnOpened = false
@@ -77,6 +85,16 @@ PanelWindow {
     Services.Wifi { id: wifiService; opened: root.wifiOpened }
     Services.Vpn { id: vpnService; opened: root.vpnOpened }
     Services.Clipboard { id: clipboardService; opened: root.clipboardOpened }
+    Services.Wallpapers {
+        id: wallpaperService
+        opened: root.wallpaperOpened
+        output: root.targetScreen ? root.targetScreen.name : ""
+        paletteController: root.paletteController
+    }
+    Connections {
+        target: root.launcher
+        function onOpenedChanged() { if (root.launcher.opened) wallpaperPicker.close() }
+    }
     IpcHandler {
         target: "clipboard"
         function toggle() { root.islandMode = root.clipboardOpened ? "music" : "clipboard" }
@@ -104,6 +122,14 @@ PanelWindow {
         function toggle() { root.powerOpened = !root.powerOpened }
         function close() { root.powerOpened = false }
     }
+    IpcHandler {
+        target: "wallpaper"
+        function open() { wallpaperPicker.open() }
+        function close() { wallpaperPicker.close() }
+        function toggle() { wallpaperPicker.toggle() }
+        function refresh() { wallpaperService.refresh() }
+        function status(): string { return wallpaperPicker.status() }
+    }
 
     screen: targetScreen
     visible: targetScreen !== null
@@ -113,10 +139,10 @@ PanelWindow {
     // Keep the layer surface stable; only the island and its input region animate.
     implicitHeight: screen ? screen.height : 1080
     color: "transparent"
-    WlrLayershell.keyboardFocus: centerExpanded ? WlrKeyboardFocus.Exclusive : menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: centerExpanded || wallpaperPicker.presented ? WlrKeyboardFocus.Exclusive : menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     mask: Region {
         width: root.width
-        height: root.barHeight
+        height: wallpaperPicker.presented ? root.height : root.barHeight
         Region { item: leftCluster }
         Region { item: rightCluster }
         Region { item: musicIsland }
@@ -173,108 +199,85 @@ PanelWindow {
                 PathLine { x: 0; y: leftCluster.height }
             }
         }
+    }
 
-        Row {
-            id: leftContent
-            anchors.left: parent.left
-            anchors.leftMargin: 10
-            y: (root.barHeight - height) / 2
-            spacing: 0
+    // Keep the same clock above the collapsing shelf instead of revealing it
+    // abruptly when the picker finally stops presenting its surface.
+    Row {
+        id: leftContent
+        objectName: "barLeftContent"
+        z: wallpaperPicker.presented ? 20 : 0
+        x: leftCluster.x + 10
+        y: leftCluster.y + (root.barHeight - height) / 2
+        spacing: 0
+        opacity: wallpaperPicker.barContentOpacity
+        enabled: !wallpaperPicker.presented
 
-            Rectangle {
-                id: distro
-                property real iconOffsetX: -3
-                property real iconOffsetY: 0
-
-                width: 42
-                height: 34
-                anchors.verticalCenter: parent.verticalCenter
-                radius: Theme.Theme.radiusSmall
-                color: distroMouse.containsMouse ? Theme.Theme.surfaceHover : "transparent"
-
-                Text {
-                    anchors.fill: parent
-                    text: ""
-                    color: Theme.Theme.textPrimary
-                    font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 18
-                    horizontalAlignment: Text.AlignHCenter
-                    verticalAlignment: Text.AlignVCenter
-
-                    transform: Translate {
-                        x: distro.iconOffsetX
-                        y: distro.iconOffsetY
-                    }
-                }
-
-                MouseArea {
-                    id: distroMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.launcher.open()
-                }
-            }
-
-            Rectangle {
-                id: distroGap
-                width: 12
-                height: 1
-                color: "transparent"
-            }
-
-            Rectangle {
-                width: 1
-                height: 18
-                anchors.verticalCenter: parent.verticalCenter
-                color: Theme.Theme.surfaceHover
-            }
-
-            Rectangle {
-                width: distroGap.width + Math.abs(distro.iconOffsetX)
-                height: 1
-                color: "transparent"
-            }
-
-            Item {
-                id: clockButton
-
-                property real hoverOffset: 48
-
-                width: clockText.implicitWidth + hoverOffset
-                height: 34
-                anchors.verticalCenter: parent.verticalCenter
-
-                Rectangle {
-                    anchors.fill: parent
-                    radius: Theme.Theme.radiusSmall
-                    color: clockMouse.containsMouse ? Theme.Theme.surfaceHover : "transparent"
-
-                    Behavior on color {
-                        enabled: Config.ShellConfig.animationsEnabled
-                        ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
-                    }
-                }
-
-                Text {
-                    id: clockText
-                    anchors.centerIn: parent
-                    text: Qt.formatDateTime(root.currentTime, root.showFullDate ? Config.ShellConfig.fullClockFormat : Config.ShellConfig.clockFormat)
-                    color: Theme.Theme.textPrimary
-                    font.family: "JetBrainsMono Nerd Font"
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
-                    verticalAlignment: Text.AlignVCenter
-                }
-
-                MouseArea {
-                    id: clockMouse
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    onClicked: root.showFullDate = !root.showFullDate
-                }
-            }
+        Item {
+            id: distroSlot
+            width: 42
+            height: 34
+            anchors.verticalCenter: parent.verticalCenter
         }
 
+        Rectangle {
+            id: distroGap
+            width: 12
+            height: 1
+            color: "transparent"
+        }
+
+        Rectangle {
+            width: 1
+            height: 18
+            anchors.verticalCenter: parent.verticalCenter
+            color: Theme.Theme.surfaceHover
+        }
+
+        Rectangle {
+            width: distroGap.width + Math.abs(distro.iconOffsetX)
+            height: 1
+            color: "transparent"
+        }
+
+        Item {
+            id: clockButton
+
+            property real hoverOffset: 48
+
+            width: clockText.implicitWidth + hoverOffset
+            height: 34
+            anchors.verticalCenter: parent.verticalCenter
+
+            Rectangle {
+                anchors.fill: parent
+                radius: Theme.Theme.radiusSmall
+                color: clockMouse.containsMouse ? Theme.Theme.surfaceHover : "transparent"
+
+                Behavior on color {
+                    enabled: Config.ShellConfig.animationsEnabled
+                    ColorAnimation { duration: 140; easing.type: Easing.OutCubic }
+                }
+            }
+
+            Text {
+                id: clockText
+                anchors.centerIn: parent
+                text: Qt.formatDateTime(root.currentTime, root.showFullDate ? Config.ShellConfig.fullClockFormat : Config.ShellConfig.clockFormat)
+                color: Theme.Theme.textPrimary
+                font.family: "JetBrainsMono Nerd Font"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                verticalAlignment: Text.AlignVCenter
+            }
+
+            MouseArea {
+                id: clockMouse
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: root.showFullDate = !root.showFullDate
+            }
+        }
     }
 
     Item {
@@ -643,6 +646,41 @@ PanelWindow {
                 }
             }
         }
+    }
+
+    Wallpaper.WallpaperPicker {
+        id: wallpaperPicker
+        anchors.fill: parent
+        z: 10
+        visible: presented
+        wallpapers: wallpaperService
+        seedWidth: leftCluster.width
+        barHeight: root.barHeight
+        onOpening: {
+            root.wifiOpened = false
+            root.vpnOpened = false
+            root.powerOpened = false
+            root.islandMode = "music"
+            if (root.launcher) root.launcher.close()
+        }
+    }
+
+    // A shared control above the shelf, not a duplicate hidden beneath its
+    // input shield. It stays clickable from the very first opening frame.
+    DistroButton {
+        id: distro
+        objectName: "wallpaperToggle"
+        z: 20
+        x: leftContent.x + distroSlot.x
+        y: leftContent.y + distroSlot.y
+        width: distroSlot.width
+        height: distroSlot.height
+        closeMode: wallpaperPicker.opened
+        onClicked: {
+            if (wallpaperPicker.opened) wallpaperPicker.close()
+            else root.launcher.open()
+        }
+        onRightClicked: wallpaperPicker.toggle()
     }
 
     Process { id: volumeToggle; command: ["wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@", "toggle"] }

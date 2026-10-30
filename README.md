@@ -5,7 +5,7 @@ Runnable shell described in `PLAN.md`, with an independent Quickshell session lo
 ## What Is Implemented
 
 - Matte status bar on `DP-1` only. `HDMI-A-1` has no panel.
-- EndeavourOS button: left click opens the launcher; right click shows the future-configurator notice.
+- NixOS button: left click opens the launcher; right click unfolds the wallpaper picker over the entire bar.
 - Clock beside the launcher icon; centered MPRIS music presence; CPU, RAM, NVIDIA GPU fallback, NetworkManager connection name, PipeWire volume, keyboard layout, and power placeholder on the right.
 - Bottom-sheet launcher, restricted to `DP-1`, opened over a dimmed primary display.
 - Launcher IPC, XDG desktop-entry index, text search, `Escape` close, arrow-key navigation, `Enter` execution, and actions for terminal, lock screen, and shell reload.
@@ -21,7 +21,7 @@ Required at runtime:
 ```text
 quickshell 0.3.1
 niri
-python3                        # status script keyboard layout parsing
+python3                        # status scripts and wallpaper library/cache helper
 wpctl (WirePlumber/PipeWire)
 nmcli (NetworkManager)
 bash, flock, timeout, realpath  # lockctl
@@ -33,8 +33,12 @@ Recommended or optional:
 
 ```text
 JetBrainsMono Nerd Font
+Noto Sans          # wallpaper picker labels
 nvidia-smi         # NVIDIA GPU utilization
-swww and matugen   # wallpaper and palette workflow
+awww               # wallpaper picker (start awww-daemon in the graphical session)
+magick             # ImageMagick; required for wallpaper previews
+ffmpeg             # optional fallback decoder for wallpaper previews
+matugen            # wallpaper-derived Material 3 shell palette
 ```
 
 Check the local environment:
@@ -191,17 +195,129 @@ Launcher and shell power-menu lock/suspend actions use `lockctl`. External Hyprl
 
 `config/ShellConfig.qml` contains bar geometry, launcher dimensions, clock format, animations flag, and application command strings. This is the user-facing configuration surface for the current release.
 
-`theme/Theme.qml` defines semantic colors. Components must use these names, not raw colors, so generated Matugen themes can replace the fallback palette later.
+`theme/Theme.qml` defines semantic colors backed by the live Matugen palette, with a built-in fallback. Components must use these names, not raw colors.
 
-## Wallpaper And Theme
+## Wallpaper Picker
 
-The installed system currently has `matugen`, but `swww` is not installed. When both are available and the swww daemon is running, use:
+Right-click the NixOS logo in the left island. The island spreads across the
+entire top edge and unfolds into a single shelf, covering every part of the bar
+without changing its reserved space or moving application windows. The slanted
+filmstrip supports mouse-wheel scrolling, trackpad scrolling, dragging, arrow
+keys, Home/End, and search (`Ctrl+F`). Click a side card to focus it, then click
+the focused card or press Enter to apply. The NixOS logo morphs into a minimal
+close icon above the shelf and stays clickable throughout opening and closing.
+The logo stays icon-only, with no background, outline, or hover decoration.
+The clock and divider fade back above the collapsing shelf before it disappears.
+Left-clicking the close icon dismisses the picker; once it turns back into the
+NixOS logo, left-click always opens the launcher, even while the shelf is still
+collapsing. Right-click toggles the picker independently of its animation.
+The shuffle button beside the navigation arrows selects another random wallpaper
+from the current search results without applying it; confirm with Apply or Enter.
+Escape, the close icon, right-clicking the shelf, or a click outside it dismisses
+the picker. Opening/closing can reverse immediately; the droplet can also be interrupted.
+Closing cancels a not-yet-submitted choice, but does not cancel an awww command
+that has already started. Its late result cannot reopen the dismissed picker
+or close a newly opened one. `Ctrl+R` refreshes the library.
+The minimal Material 3 controls sit below the filmstrip: navigation, search,
+and Apply. Labels are English; search and Apply have matching 56px pill heights.
+There is no header or fullscreen image overlay.
+
+Configure in `config/ShellConfig.qml`:
+
+```qml
+readonly property string wallpaperDirectory: "" // ~/Pictures/Wallpaper
+readonly property bool wallpaperRecursive: true
+readonly property int wallpaperPanelHeight: 392
+readonly property real wallpaperTransitionDuration: 1.8
+readonly property int wallpaperTransitionFps: 180
+readonly property int wallpaperCacheLimitMiB: 128
+readonly property bool wallpaperThemeEnabled: true
+readonly property string wallpaperThemeMode: "dark"
+readonly property string wallpaperThemeScheme: "scheme-tonal-spot"
+```
+
+This machine explicitly uses `~/.config/wallpaper`, its existing collection.
+Set the directory to `"~/Pictures/Wallpaper"`, another path, or `""` for the
+standard default. Missing/empty directories and backend errors appear in the
+picker. Hidden files and hidden subdirectories are excluded. PNG, JPEG, WebP,
+GIF, BMP, TIFF, AVIF, PNM, and TGA are indexed; support for the originals depends
+on ImageMagick/ffmpeg and awww. Only the first frame is used for animated previews.
+
+Requires `python3`, ImageMagick (`magick`), `awww`, a running `awww-daemon`,
+and Qt >= 6.8. `ffmpeg` is an optional independent fallback decoder. No Pillow,
+thumbnail daemon, generated shaders, or network access is needed.
+
+Previews are persistent JPEGs no larger than 768×480 in
+`${XDG_CACHE_HOME:-~/.cache}/quickshell/wallpapers/v2-768x480`. Cache identity
+includes the original path, size, and modification time. The default disk
+budget is 128 MiB, with older previews pruned first. Generation runs at low
+priority with at most two workers and small batches; visible cards and their
+neighbours take precedence over background warming of the first 128 entries.
+ImageMagick's separate temporary pixel-cache disk limit is 1 GiB per worker;
+this is not a RAM allocation or the persistent preview-cache budget.
+
+Only a bounded ring of carousel delegates is created. Moving the window by one
+recycles one image source, retaining the other textures. Small previews decode
+asynchronously without Qt's shared image cache or per-card offscreen layers.
+QuickShell never decodes original wallpapers, even for the selection animation.
+Opening/closing springs preserve momentum on reversal and behave identically
+at different refresh rates. `animationsEnabled: false` disables the morph,
+filmstrip motion, droplet, and awww transition.
+
+The selected photograph straightens, narrows into a droplet, and drains upward
+from its exact screen-space rectangle over 640 ms. awww's `grow` reveal starts
+at the top edge below the droplet, with its Y coordinate converted to awww's
+bottom-origin convention. By default the
+wallpaper changes on **all outputs**. On errors the shelf returns with the
+selection intact; it never reports success based only on an animation. Changes
+are serialized across instances. awww manages its own wallpaper persistence.
+The palette is generated after a confirmed change without restarting the bar
+or invoking Waypaper hooks. Slowing awww to 1.8 seconds does not slow down the
+shelf or its 640ms droplet.
+
+```sh
+qs -p ~/.config/quickshell ipc call wallpaper toggle
+qs -p ~/.config/quickshell ipc call wallpaper close
+qs -p ~/.config/quickshell ipc call wallpaper refresh
+qs -p ~/.config/quickshell ipc call wallpaper status
+```
+
+### Wallpaper-Derived Material 3 Theme
+
+Matugen extracts a deterministic source color from the small cached preview
+using `scheme-tonal-spot`. Its Material 3 roles drive surfaces, text, accents,
+and error colors throughout QuickShell. Color changes blend over 400 ms
+(immediate with reduced motion). The palette is saved atomically to
+`${XDG_STATE_HOME:-~/.local/state}/quickshell/theme.json` and restored on startup.
+Unchanged wallpapers reuse that palette; missing Matugen, invalid output, or
+generation failures keep the previous valid theme. Selecting a wallpaper still
+works when theme generation fails.
+
+Automatic generation uses Matugen's `--dry-run --json hex` mode: no application
+hooks, external templates, compositor settings, or QML files are changed. The
+existing `~/.config/matugen` configuration is left untouched. Use `"light"` for
+`wallpaperThemeMode`, another Matugen scheme for `wallpaperThemeScheme`, or
+disable `wallpaperThemeEnabled` to retain the built-in fallback palette.
+
+```sh
+qs -p ~/.config/quickshell ipc call theme status
+qs -p ~/.config/quickshell ipc call theme refresh
+# Palette only; does not change the wallpaper or render application templates:
+python3 -B ~/.config/quickshell/scripts/theme.py /absolute/path/to/wallpaper.png
+```
+
+### Separate Application Theme Update
+
+To also regenerate the existing Matugen application templates, use:
 
 ```sh
 ~/.config/quickshell/scripts/update-theme.sh /absolute/path/to/wallpaper.png
 ```
 
-The script validates dependencies, sets the wallpaper, runs `matugen image ... -m dark`, then reloads QuickShell. At this initial stage, Matugen continues generating the existing formats while `theme/Theme.qml` remains the QML fallback. A dedicated `Colors.qml` Matugen template and generated Hyprland border colors should be introduced together in the next theme increment, so no partially generated theme is ever loaded.
+The script validates dependencies, sets the wallpaper through awww, runs
+`matugen image ... -m dark --source-color-index 0`, and writes the live shell
+palette. QuickShell watches the palette file and does not restart. Application
+templates/hooks run only through this explicit command, not through the picker.
 
 ## Troubleshooting
 
@@ -210,4 +326,5 @@ The script validates dependencies, sets the wallpaper, runs `matugen image ... -
 - All values show fallback data: ensure `wpctl`, `nmcli`, and `niri msg keyboard-layouts` work in the niri user session; run `shellctl diagnostics`.
 - Keyboard layout is `--`: check `niri msg -j keyboard-layouts` and the Quickshell logs. The bar parses JSON directly without `jq`.
 - Launcher opens but cannot execute a command: adjust the command in `ShellConfig.qml`; verify it in a terminal first.
+- Wallpaper previews remain empty: check `magick` with `shellctl diagnostics`; `ffmpeg` provides a fallback for failed decodes. Press `Ctrl+R` in the picker to retry failures and refresh the cache index. The footer shows the affected filename and decoder error.
 - Need logs: run `qs log` while the shell instance is running.

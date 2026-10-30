@@ -57,7 +57,10 @@ case "${1:-}" in
         require_command nmcli || status=1
         printf '%s\n' 'Optional:'
         require_command nvidia-smi || true
-        require_command swww || true
+        require_command awww || true
+        require_command awww-daemon || true
+        require_command magick || true
+        require_command ffmpeg || true
         require_command matugen || true
         exit "$status"
         ;;

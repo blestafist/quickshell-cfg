@@ -16,15 +16,17 @@ if [ ! -f "$wallpaper" ]; then
     exit 2
 fi
 
-for command in swww matugen qs; do
+for command in awww matugen python3; do
     if ! command -v "$command" >/dev/null 2>&1; then
         printf 'Required command is missing: %s\n' "$command" >&2
         exit 1
     fi
 done
 
-swww img "$wallpaper"
-matugen image "$wallpaper" -m dark
+awww img "$wallpaper" --transition-type grow --transition-pos top \
+    --transition-duration 1.8 --transition-fps 180 \
+    --transition-bezier 0.22,0.8,0.2,1
+matugen image "$wallpaper" -m dark --source-color-index 0
 
-# Theme.qml remains a reliable fallback until a Matugen QML template is enabled.
-qs -p "$config_dir" ipc call shell reload
+# The running shell watches the atomic palette file; no restart or QML rewrite.
+python3 -B "$config_dir/scripts/theme.py" "$wallpaper"

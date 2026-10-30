@@ -1,0 +1,2 @@
+singleton ShellConfig 1.0 ShellConfig.qml
+singleton MachineConfig 1.0 MachineConfig.qml

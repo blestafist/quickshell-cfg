@@ -12,6 +12,17 @@ QtObject {
     readonly property string fullClockFormat: "ddd, dd MMMM, yyyy - HH:mm:ss"
     readonly property bool animationsEnabled: true
 
+    // Empty means ~/Pictures/Wallpaper. Use the existing collection on this machine.
+    readonly property string wallpaperDirectory: "~/.config/wallpaper"
+    readonly property bool wallpaperRecursive: true
+    readonly property int wallpaperPanelHeight: 392
+    readonly property real wallpaperTransitionDuration: 1.8
+    readonly property int wallpaperTransitionFps: 180
+    readonly property int wallpaperCacheLimitMiB: 128
+    readonly property bool wallpaperThemeEnabled: true
+    readonly property string wallpaperThemeMode: "dark"
+    readonly property string wallpaperThemeScheme: "scheme-tonal-spot"
+
     readonly property string terminalCommand: "kitty"
     readonly property string browserCommand: "zen-browser"
     readonly property string fileManagerCommand: "thunar"

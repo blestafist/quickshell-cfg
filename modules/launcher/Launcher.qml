@@ -31,8 +31,6 @@ PanelWindow {
     property bool showingHidden: false
 
     property var targetScreen: null
-    property string launchOutputName: ""
-    property bool outputFocusChanged: false
     screen: targetScreen
     visible: presented && targetScreen !== null
     anchors { top: true; bottom: true; left: true; right: true }
@@ -68,22 +66,14 @@ PanelWindow {
             return
         let name = ""
         try { name = JSON.parse(output).name } catch (error) {}
-        const focusedScreen = Quickshell.screens.find(screen => screen.name === name)
-        targetScreen = Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
+        targetScreen = Quickshell.screens.find(screen => screen.name === name)
+            || Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
             || Quickshell.screens[0] || null
-        launchOutputName = focusedScreen ? focusedScreen.name : targetScreen ? targetScreen.name : ""
         if (!targetScreen) {
             openingRequested = false
             return
         }
-        // Niri grants exclusive layer focus only on its active output.
-        // Keep the launch destination separate from the launcher's own screen.
-        if (Quickshell.env("NIRI_SOCKET")) {
-            focusLauncherOutput.command = ["niri", "msg", "action", "focus-monitor", targetScreen.name]
-            focusLauncherOutput.running = true
-        } else {
-            presentOnTarget()
-        }
+        presentOnTarget()
     }
 
     function presentOnTarget() {
@@ -115,29 +105,6 @@ PanelWindow {
         onExited: root.finishOpen(focusedOutputText.text)
     }
 
-    Process {
-        id: focusLauncherOutput
-        onExited: (exitCode, exitStatus) => {
-            root.outputFocusChanged = exitCode === 0
-            if (root.openingRequested)
-                root.presentOnTarget()
-            else
-                root.restoreOutputFocus()
-        }
-    }
-
-    Process { id: restoreOutput }
-
-    function restoreOutputFocus() {
-        if (!outputFocusChanged)
-            return
-        outputFocusChanged = false
-        if (launchOutputName) {
-            restoreOutput.command = ["niri", "msg", "action", "focus-monitor", launchOutputName]
-            restoreOutput.startDetached()
-        }
-    }
-
     onPresentedChanged: {
         if (!presented)
             Qt.callLater(finishDismissal)
@@ -148,8 +115,6 @@ PanelWindow {
             return
         if (pendingCommand.length)
             runPendingCommand()
-        else
-            restoreOutputFocus()
     }
 
     function runPendingCommand() {
@@ -157,7 +122,6 @@ PanelWindow {
             return
         commandRunner.command = pendingCommand
         pendingCommand = []
-        outputFocusChanged = false
         commandRunner.startDetached()
     }
 
@@ -243,11 +207,7 @@ PanelWindow {
         }
         let command = item.kind === "application"
             ? ["gio", "launch", item.desktopFile] : ["sh", "-c", item.command]
-        // Release exclusive keyboard focus before spawning. Restore the output
-        // selected at opening so Niri places the new window on that monitor.
-        if (Quickshell.env("NIRI_SOCKET") && launchOutputName)
-            command = ["sh", "-c", 'niri msg action focus-monitor "$1" >/dev/null && shift && exec "$@"',
-                "launcher", launchOutputName].concat(command)
+        // Release exclusive keyboard focus before spawning on the active output.
         pendingCommand = command
         close()
     }

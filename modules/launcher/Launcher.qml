@@ -14,6 +14,8 @@ PanelWindow {
 
     property bool opened: false
     property bool presented: false
+    property bool openingRequested: false
+    property var pendingCommand: []
     property string message: ""
     property int selectedIndex: 0
     property var applications: []
@@ -28,12 +30,13 @@ PanelWindow {
     property var hiddenIds: []
     property bool showingHidden: false
 
-    property var targetScreen: Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
+    property var targetScreen: null
     screen: targetScreen
     visible: presented && targetScreen !== null
     anchors { top: true; bottom: true; left: true; right: true }
     exclusiveZone: 0
     color: "transparent"
+    WlrLayershell.layer: WlrLayer.Overlay
     WlrLayershell.keyboardFocus: presented ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
     mask: Region {
         width: root.presented ? root.width : 0
@@ -46,20 +49,68 @@ PanelWindow {
         showingHidden = false
         search.text = ""
         filterResults("")
+        openingRequested = true
+        if (presented) {
+            opened = true
+            search.forceActiveFocus()
+        } else if (Quickshell.env("NIRI_SOCKET")) {
+            if (!focusedOutput.running)
+                focusedOutput.running = true
+        } else {
+            finishOpen("")
+        }
+    }
+
+    function finishOpen(output) {
+        if (!openingRequested)
+            return
+        let name = ""
+        try { name = JSON.parse(output).name } catch (error) {}
+        targetScreen = Quickshell.screens.find(screen => screen.name === name)
+            || Quickshell.screens.find(screen => screen.name === Config.MachineConfig.primaryMonitor)
+            || Quickshell.screens[0] || null
+        if (!targetScreen) {
+            openingRequested = false
+            return
+        }
         presented = true
-        search.forceActiveFocus()
         Qt.callLater(() => {
+            if (!openingRequested || !presented)
+                return
             opened = true
             search.forceActiveFocus()
         })
     }
 
     function close() {
+        openingRequested = false
         opened = false
+        if (sheet.reveal === 0)
+            presented = false
     }
 
-    function toggle() { opened ? close() : open() }
+    function toggle() { openingRequested ? close() : open() }
     function showMessage(text) { message = text; open(false) }
+
+    Process {
+        id: focusedOutput
+        command: ["niri", "msg", "--json", "focused-output"]
+        stdout: StdioCollector { id: focusedOutputText }
+        onExited: root.finishOpen(focusedOutputText.text)
+    }
+
+    onPresentedChanged: {
+        if (!presented && pendingCommand.length)
+            Qt.callLater(runPendingCommand)
+    }
+
+    function runPendingCommand() {
+        if (!pendingCommand.length)
+            return
+        commandRunner.command = pendingCommand
+        pendingCommand = []
+        commandRunner.startDetached()
+    }
 
     function normalized(value) { return (value || "").toLowerCase() }
 
@@ -141,11 +192,14 @@ PanelWindow {
             showHiddenEntries(true)
             return
         }
-        if (item.kind === "application")
-            commandRunner.command = ["gio", "launch", item.desktopFile]
-        else
-            commandRunner.command = ["sh", "-c", item.command]
-        commandRunner.startDetached()
+        let command = item.kind === "application"
+            ? ["gio", "launch", item.desktopFile] : ["sh", "-c", item.command]
+        // Release exclusive keyboard focus before spawning. Restore the output
+        // selected at opening so Niri places the new window on that monitor.
+        if (Quickshell.env("NIRI_SOCKET") && targetScreen)
+            command = ["sh", "-c", 'niri msg action focus-monitor "$1" >/dev/null && shift && exec "$@"',
+                "launcher", targetScreen.name].concat(command)
+        pendingCommand = command
         close()
     }
 
@@ -204,10 +258,11 @@ PanelWindow {
 
         readonly property int padding: 12
         readonly property int frameInset: 36
-        readonly property real frameFlare: 36 + 32 * (1 - reveal)
-        readonly property real frameTopRadius: Math.min(width / 2 - frameFlare, 40 + 100 * (1 - reveal))
+        readonly property real progress: Math.max(0, Math.min(1, reveal))
+        readonly property real frameFlare: 36 + 32 * (1 - progress)
+        readonly property real frameTopRadius: Math.max(0, Math.min(width / 2 - frameFlare, 40 + 100 * (1 - progress)))
         property real reveal: root.opened ? 1 : 0
-        readonly property real swell: Math.sin(reveal * Math.PI)
+        readonly property real swell: Math.sin(progress * Math.PI)
         readonly property int rowHeight: 72
         readonly property int visibleRows: Math.min(Math.max(root.results.length, 1), 6)
         readonly property real listHeight: visibleRows * rowHeight + (visibleRows - 1) * 6 + padding * 2
@@ -218,7 +273,7 @@ PanelWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
         anchors.bottomMargin: Config.ShellConfig.launcherBottomMargin
-        enabled: root.presented
+        enabled: root.opened
         visible: root.presented
         // Keep the entire surface attached to the screen edge throughout the morph.
         transform: Scale {
@@ -236,14 +291,14 @@ PanelWindow {
         Behavior on reveal {
             enabled: Config.ShellConfig.animationsEnabled
             NumberAnimation {
-                duration: root.opened ? 560 : 420
-                easing.type: Easing.BezierSpline
-                easing.bezierCurve: [0.22, 0.72, 0.18, 1, 1, 1]
+                duration: root.opened ? 420 : 280
+                easing.type: root.opened ? Easing.OutBack : Easing.OutCubic
+                easing.overshoot: 1.1
             }
         }
 
         Behavior on height {
-            enabled: Config.ShellConfig.animationsEnabled && root.presented
+            enabled: Config.ShellConfig.animationsEnabled && root.opened && sheet.reveal === 1
             NumberAnimation {
                 duration: 320
                 easing.type: Easing.BezierSpline

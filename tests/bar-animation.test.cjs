@@ -50,3 +50,38 @@ test('disabled animations apply left island width immediately', () => {
     assert.equal(s.width, 500);
     assert.equal(s.leftIslandWidthAnimation.starts, 0);
 });
+
+test('clipboard opening waits for expanded state before selecting bounce on both axes', () => {
+    const start = source.indexOf('function animateSize(', source.indexOf('id: musicIsland'));
+    const end = source.indexOf('onTargetWidthChanged:', start);
+    const pending = new Set();
+    const animation = () => ({easing: {}, stop() {}, start() {}});
+    const s = {
+        root: {centerExpanded: false},
+        musicIsland: {width: 0, height: 42},
+        musicClickAnimation: {running: false},
+        Config: {ShellConfig: {animationsEnabled: true}},
+        Easing: {OutBack: 'bounce', OutCubic: 'smooth'},
+        Qt: {callLater(fn) { pending.add(fn); }},
+        targetWidth: 860, targetHeight: 192,
+        islandWidthAnimation: animation(), centerHeightAnimation: animation(),
+    };
+    vm.createContext(s);
+    vm.runInContext(source.slice(start, end), s);
+    for (const axis of ['Width', 'Height']) {
+        const handler = source.match(new RegExp(`onTarget${axis}Changed: (Qt.callLater\\(animate${axis}\\))`));
+        assert.ok(handler);
+        vm.runInContext(handler[1], s);
+    }
+    assert.equal(s.islandWidthAnimation.to, undefined);
+    s.root.centerExpanded = true;
+    for (const run of pending) run();
+    assert.equal(s.islandWidthAnimation.easing.type, 'bounce');
+    assert.equal(s.centerHeightAnimation.easing.type, 'bounce');
+    assert.equal(s.centerHeightAnimation.to, 192);
+    s.musicIsland.height = 192;
+    s.targetHeight = 42;
+    s.root.centerExpanded = false;
+    s.animateHeight();
+    assert.equal(s.centerHeightAnimation.easing.type, 'smooth');
+});

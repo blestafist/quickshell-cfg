@@ -299,8 +299,12 @@ PanelWindow {
             animation.easing.type = root.centerExpanded && target > musicIsland[propertyName] ? Easing.OutBack : Easing.OutCubic
             animation.start()
         }
-        onTargetWidthChanged: animateSize(islandWidthAnimation, "width", targetWidth)
-        onTargetHeightChanged: animateSize(centerHeightAnimation, "height", targetHeight)
+        // Let the mode and its derived flags settle before choosing the easing.
+        // Coalesce size updates so opening clipboard cannot start a closing curve.
+        function animateWidth() { animateSize(islandWidthAnimation, "width", targetWidth) }
+        function animateHeight() { animateSize(centerHeightAnimation, "height", targetHeight) }
+        onTargetWidthChanged: Qt.callLater(animateWidth)
+        onTargetHeightChanged: Qt.callLater(animateHeight)
 
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top

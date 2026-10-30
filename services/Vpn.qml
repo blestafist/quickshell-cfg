@@ -13,6 +13,7 @@ Item {
     property alias savedTargetLabel: saved.targetLabel
     property bool startupAttempted: false
     property int startupAttempts: 0
+    property bool startupConnecting: false
 
     readonly property bool available: backend.available
     readonly property bool connected: backend.connected
@@ -34,11 +35,21 @@ Item {
     function refresh() { backend.refresh() }
     function loadCountries() { backend.loadCountries() }
     function loadCities(country) { backend.loadCities(country) }
-    function disconnect() { backend.disconnect() }
+    function disconnect() {
+        cancelStartupAutoConnect()
+        backend.disconnect()
+    }
     function setSetting(name, value) { backend.setSetting(name, value) }
+
+    function cancelStartupAutoConnect() {
+        startupAttempted = true
+        startupConnecting = false
+        retryTimer.stop()
+    }
 
     function connectTarget(target, remember = true) {
         if (remember) {
+            cancelStartupAutoConnect()
             savedTargetType = target.type
             savedTargetValue = target.value
             savedTargetLabel = target.label
@@ -47,9 +58,12 @@ Item {
     }
 
     function tryAutoConnect() {
-        if (startupAttempted || startupAttempts >= 4 || !autoConnect || !backend.startupRefreshDone || backend.connected || backend.busy) return
+        if (startupAttempted || startupAttempts >= 4 || !autoConnect || !backend.startupRefreshDone || backend.busy || retryTimer.running) return
+        // An existing connection also consumes the startup opportunity.
         startupAttempted = true
+        if (backend.connected) return
         startupAttempts++
+        startupConnecting = true
         connectTarget({ type: savedTargetType, value: savedTargetValue, label: savedTargetLabel }, false)
     }
 
@@ -79,10 +93,13 @@ Item {
     ProtonVpn {
         id: proton
         onActionCompleted: success => {
+            const wasStartupConnect = root.startupConnecting
+            root.startupConnecting = false
             root.actionCompleted(success)
-            if (!success && root.autoConnect && root.startupAttempts < 4) {
+            if (wasStartupConnect && !success && root.autoConnect && root.startupAttempts < 4) {
                 root.startupAttempted = false
                 retryTimer.restart()
+                return
             }
             root.tryAutoConnect()
         }

@@ -23,6 +23,8 @@ function context() {
     const s = {
         opened: false, presented: false, openingRequested: false,
         targetScreen: null, launchOutputName: '', message: '', showingHidden: false, pendingCommand: [],
+        outputFocusChanged: false, focusLauncherOutput: {running: false},
+        restoreOutput: {starts: 0, startDetached() { this.starts++; }},
         Config: {MachineConfig: {primaryMonitor: primary.name}},
         Quickshell: {screens: [primary, secondary], env: () => '/run/niri.sock'},
         Qt: {callLater: fn => queued.push(fn)},
@@ -32,7 +34,7 @@ function context() {
         queued, primary, secondary,
     };
     vm.createContext(s);
-    for (const name of ['open', 'finishOpen', 'close', 'toggle', 'activate', 'runPendingCommand'])
+    for (const name of ['open', 'finishOpen', 'presentOnTarget', 'close', 'toggle', 'activate', 'runPendingCommand', 'finishDismissal', 'restoreOutputFocus'])
         vm.runInContext(functionSource(name), s);
     return s;
 }
@@ -45,6 +47,10 @@ test('launcher stays on primary, remembers focused output for launch and focuses
     s.finishOpen('{"name":"HDMI-A-1"}');
     assert.equal(s.targetScreen, s.primary);
     assert.equal(s.launchOutputName, s.secondary.name);
+    assert.equal(s.presented, false);
+    assert.deepEqual(Array.from(s.focusLauncherOutput.command),
+        ['niri', 'msg', 'action', 'focus-monitor', 'DP-1']);
+    s.presentOnTarget();
     assert.equal(s.presented, true);
     assert.equal(s.opened, false);
     s.queued.shift()();
@@ -80,6 +86,7 @@ test('close before deferred opening cannot revive the launcher', () => {
     const s = context();
     s.openingRequested = true;
     s.finishOpen('{"name":"HDMI-A-1"}');
+    s.presentOnTarget();
     s.sheet.reveal = 0;
     s.close();
     s.queued.shift()();
@@ -99,10 +106,33 @@ test('application launch waits for dismissal and retains output and quoted deskt
     assert.deepEqual(Array.from(s.pendingCommand).slice(3),
         ['launcher', 'HDMI-A-1', 'gio', 'launch', '/apps/My App.desktop']);
     assert.match(s.pendingCommand[2], /focus-monitor "\$1".*exec "\$@"/);
-    assert.match(source, /if \(!presented && pendingCommand.length\)\s+Qt.callLater\(runPendingCommand\)/);
-    s.runPendingCommand();
+    assert.match(source, /if \(!presented\)\s+Qt.callLater\(finishDismissal\)/);
+    s.presented = false;
+    s.finishDismissal();
     s.runPendingCommand();
     assert.equal(s.commandRunner.starts, 1);
+});
+
+test('dismissal restores original output without launching an application', () => {
+    const s = context();
+    s.outputFocusChanged = true;
+    s.launchOutputName = s.secondary.name;
+    s.finishDismissal();
+    assert.deepEqual(Array.from(s.restoreOutput.command),
+        ['niri', 'msg', 'action', 'focus-monitor', 'HDMI-A-1']);
+    assert.equal(s.restoreOutput.starts, 1);
+    s.finishDismissal();
+    assert.equal(s.restoreOutput.starts, 1);
+});
+
+test('cancelled output focus transfer does not map the launcher', () => {
+    const s = context();
+    s.openingRequested = true;
+    s.finishOpen('{"name":"HDMI-A-1"}');
+    s.close();
+    s.presentOnTarget();
+    assert.equal(s.presented, false);
+    assert.equal(s.queued.length, 0);
 });
 
 test('launcher uses overlay exclusive focus throughout presentation', () => {

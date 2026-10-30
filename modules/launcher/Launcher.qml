@@ -32,6 +32,7 @@ PanelWindow {
 
     property var targetScreen: null
     property string launchOutputName: ""
+    property bool outputFocusChanged: false
     screen: targetScreen
     visible: presented && targetScreen !== null
     anchors { top: true; bottom: true; left: true; right: true }
@@ -75,6 +76,19 @@ PanelWindow {
             openingRequested = false
             return
         }
+        // Niri grants exclusive layer focus only on its active output.
+        // Keep the launch destination separate from the launcher's own screen.
+        if (Quickshell.env("NIRI_SOCKET")) {
+            focusLauncherOutput.command = ["niri", "msg", "action", "focus-monitor", targetScreen.name]
+            focusLauncherOutput.running = true
+        } else {
+            presentOnTarget()
+        }
+    }
+
+    function presentOnTarget() {
+        if (!openingRequested)
+            return
         presented = true
         Qt.callLater(() => {
             if (!openingRequested || !presented)
@@ -101,9 +115,41 @@ PanelWindow {
         onExited: root.finishOpen(focusedOutputText.text)
     }
 
+    Process {
+        id: focusLauncherOutput
+        onExited: (exitCode, exitStatus) => {
+            root.outputFocusChanged = exitCode === 0
+            if (root.openingRequested)
+                root.presentOnTarget()
+            else
+                root.restoreOutputFocus()
+        }
+    }
+
+    Process { id: restoreOutput }
+
+    function restoreOutputFocus() {
+        if (!outputFocusChanged)
+            return
+        outputFocusChanged = false
+        if (launchOutputName) {
+            restoreOutput.command = ["niri", "msg", "action", "focus-monitor", launchOutputName]
+            restoreOutput.startDetached()
+        }
+    }
+
     onPresentedChanged: {
-        if (!presented && pendingCommand.length)
-            Qt.callLater(runPendingCommand)
+        if (!presented)
+            Qt.callLater(finishDismissal)
+    }
+
+    function finishDismissal() {
+        if (presented || openingRequested)
+            return
+        if (pendingCommand.length)
+            runPendingCommand()
+        else
+            restoreOutputFocus()
     }
 
     function runPendingCommand() {
@@ -111,6 +157,7 @@ PanelWindow {
             return
         commandRunner.command = pendingCommand
         pendingCommand = []
+        outputFocusChanged = false
         commandRunner.startDetached()
     }
 

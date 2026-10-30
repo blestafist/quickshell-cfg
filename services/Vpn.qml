@@ -47,13 +47,9 @@ Item {
         retryTimer.stop()
     }
 
-    function connectTarget(target, remember = true) {
-        if (remember) {
-            cancelStartupAutoConnect()
-            savedTargetType = target.type
-            savedTargetValue = target.value
-            savedTargetLabel = target.label
-        }
+    function connectTarget(target, startup = false) {
+        // Manual connections never change the explicitly configured login target.
+        if (!startup) cancelStartupAutoConnect()
         backend.connectTarget(target)
     }
 
@@ -64,7 +60,7 @@ Item {
         if (backend.connected) return
         startupAttempts++
         startupConnecting = true
-        connectTarget({ type: savedTargetType, value: savedTargetValue, label: savedTargetLabel }, false)
+        connectTarget({ type: savedTargetType, value: savedTargetValue, label: savedTargetLabel }, true)
     }
 
     FileView {

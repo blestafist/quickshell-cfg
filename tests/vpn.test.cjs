@@ -27,14 +27,14 @@ function context(connected = false) {
         },
         backend: {
             connected, busy: false, startupRefreshDone: true,
-            connectTarget() { s.connects++; },
+            connectTarget(target) { s.connects++; s.lastTarget = target; },
             disconnect() { s.disconnects++; }
         }
     };
     s.root = s;
     vm.createContext(s);
     for (const [name, args] of [['disconnect', ''], ['cancelStartupAutoConnect', ''],
-                               ['connectTarget', 'target, remember = true'], ['tryAutoConnect', '']]) {
+                               ['connectTarget', 'target, startup = false'], ['tryAutoConnect', '']]) {
         vm.runInContext(`function ${name}(${args}) {${block(`function ${name}(`)}}`, s);
     }
     s.complete = success => vm.runInContext(`(function(success) {${block('onActionCompleted:')}})(${success})`, s);
@@ -99,7 +99,32 @@ test('manual connection cancels startup retries and is not itself retried', () =
     s.complete(false);
     s.retry();
     assert.equal(s.connects, 2);
-    assert.equal(s.savedTargetValue, 'AT#1');
+    assert.equal(s.lastTarget.value, 'AT#1');
+    assert.equal(s.savedTargetType, 'country');
+    assert.equal(s.savedTargetValue, 'AT');
+    assert.equal(s.savedTargetLabel, 'Austria');
+});
+
+test('manual location changes preserve the default used at next startup', () => {
+    const s = context();
+    for (const target of [
+        {type: 'country', value: 'DE', label: 'Germany'},
+        {type: 'server', value: 'DE#1', label: 'DE#1'},
+        {type: 'fastest', value: '', label: 'Fastest server'},
+        {type: 'random', value: '', label: 'Random server'}
+    ]) {
+        s.connectTarget(target);
+        assert.equal(s.lastTarget, target);
+        assert.equal(s.savedTargetType, 'country');
+        assert.equal(s.savedTargetValue, 'AT');
+        assert.equal(s.savedTargetLabel, 'Austria');
+    }
+    s.startupAttempted = false;
+    s.tryAutoConnect();
+    assert.equal(s.lastTarget.type, 'country');
+    assert.equal(s.lastTarget.value, 'AT');
+    assert.equal(s.lastTarget.label, 'Austria');
+    assert.equal(s.startupConnecting, true);
 });
 
 test('unrelated command failure does not rearm completed startup', () => {

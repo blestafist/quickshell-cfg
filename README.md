@@ -25,7 +25,7 @@ python3                        # status scripts and wallpaper library/cache help
 wpctl (WirePlumber/PipeWire)
 nmcli (NetworkManager)
 bash, flock, timeout, realpath  # lockctl
-systemctl                      # guarded suspend
+loginctl                       # elogind: poweroff, reboot, guarded suspend
 /etc/pam.d/hyprlock             # PAM service supplied by hyprlock
 ```
 
@@ -174,7 +174,7 @@ After the isolated smoke checklist in [docs/lockscreen.md](docs/lockscreen.md), 
 hl.bind(mainMod .. " + L", hl.dsp.exec_cmd("~/.config/quickshell/scripts/lockctl lock"))
 ```
 
-Launcher and shell power-menu lock/suspend actions use `lockctl`. External Hyprland configuration was not changed. This does not protect suspend initiated elsewhere, including lid events, idle daemons, or direct `systemctl suspend`. No real-session lock, PAM authentication, or suspend has been runtime-verified by the non-live tests.
+Launcher and shell power-menu lock/suspend actions use `lockctl`. On this Artix/dinit installation, elogind also checks the lock before external sleep requests; see [power management](docs/power-management.md). No real-session lock, PAM authentication, or suspend has been runtime-verified by the non-live tests.
 
 `Super+S` may still invoke `wlogout` through the existing external binding; its actions are outside this integration.
 

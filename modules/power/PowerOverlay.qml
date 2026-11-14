@@ -30,13 +30,13 @@ Scope {
             actionProcess.command = [Quickshell.env("HOME") + "/.config/quickshell/scripts/lockctl", "lock"]
             break
         case "shutdown":
-            actionProcess.command = ["systemctl", "poweroff"]
+            actionProcess.command = ["loginctl", "poweroff"]
             break
         case "suspend":
             actionProcess.command = [Quickshell.env("HOME") + "/.config/quickshell/scripts/lockctl", "lock-and-suspend"]
             break
         case "reboot":
-            actionProcess.command = ["systemctl", "reboot"]
+            actionProcess.command = ["loginctl", "reboot"]
             break
         case "logout":
             actionProcess.command = ["niri", "msg", "action", "quit", "--skip-confirmation"]

@@ -54,7 +54,7 @@ ShellRoot {
 
     Process {
         id: suspendProcess
-        command: ["systemctl", "suspend"]
+        command: ["loginctl", "suspend"]
         onRunningChanged: {
             if (!running && root.suspendPending) {
                 root.suspendResult = "failed"

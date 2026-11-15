@@ -22,3 +22,10 @@ test('power menu exposes unmodified keyboard shortcuts', () => {
     assert.match(panel, /event\.isAutoRepeat/);
     assert.match(panel, /actionRequested\(action\)/);
 });
+
+test('power menu grabs compositor focus and focuses after becoming visible', () => {
+    const bar = fs.readFileSync('modules/bar/Bar.qml', 'utf8');
+    assert.match(bar, /centerExpanded \|\| wallpaperPicker\.presented \|\| powerOpened \? WlrKeyboardFocus\.Exclusive/);
+    assert.match(bar, /if \(powerOpened && powerPanel\.visible && powerPanel\.enabled\)\s*powerPanel\.forceActiveFocus\(\)/);
+    assert.match(bar, /onVisibleChanged: if \(visible\) Qt\.callLater\(root\.focusPowerPanel\)/);
+});

@@ -78,8 +78,13 @@ PanelWindow {
             islandMode = "music"
             wifiOpened = false
             vpnOpened = false
-            powerPanel.forceActiveFocus()
+            Qt.callLater(root.focusPowerPanel)
         }
+    }
+
+    function focusPowerPanel() {
+        if (powerOpened && powerPanel.visible && powerPanel.enabled)
+            powerPanel.forceActiveFocus()
     }
 
     Services.Wifi { id: wifiService; opened: root.wifiOpened }
@@ -139,7 +144,7 @@ PanelWindow {
     // Keep the layer surface stable; only the island and its input region animate.
     implicitHeight: screen ? screen.height : 1080
     color: "transparent"
-    WlrLayershell.keyboardFocus: centerExpanded || wallpaperPicker.presented ? WlrKeyboardFocus.Exclusive : menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
+    WlrLayershell.keyboardFocus: centerExpanded || wallpaperPicker.presented || powerOpened ? WlrKeyboardFocus.Exclusive : menuOpened ? WlrKeyboardFocus.OnDemand : WlrKeyboardFocus.None
     mask: Region {
         width: root.width
         height: wallpaperPicker.presented ? root.height : root.barHeight
@@ -635,6 +640,7 @@ PanelWindow {
                 height: implicitHeight
                 visible: parent.height > 0 && !root.wifiOpened && !root.vpnOpened
                 enabled: root.powerOpened
+                onVisibleChanged: if (visible) Qt.callLater(root.focusPowerPanel)
                 opacity: root.powerOpened ? 1 : 0
                 y: root.powerOpened ? 0 : -12
                 Behavior on opacity { NumberAnimation { duration: Config.ShellConfig.animationsEnabled ? 180 : 0 } }

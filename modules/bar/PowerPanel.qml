@@ -13,13 +13,30 @@ FocusScope {
 
     implicitHeight: 82
     Keys.onEscapePressed: closeRequested()
+    Keys.onPressed: event => {
+        if (event.isAutoRepeat || event.modifiers !== Qt.NoModifier)
+            return
+
+        const shortcuts = {
+            [Qt.Key_L]: "lock",
+            [Qt.Key_S]: "shutdown",
+            [Qt.Key_U]: "suspend",
+            [Qt.Key_R]: "reboot",
+            [Qt.Key_E]: "logout"
+        }
+        const action = shortcuts[event.key]
+        if (action) {
+            event.accepted = true
+            actionRequested(action)
+        }
+    }
 
     readonly property var actions: [
-        { name: "Lock", action: "lock", icon: "../../assets/power/lock.png" },
-        { name: "Shutdown", action: "shutdown", icon: "../../assets/power/power.png" },
-        { name: "Suspend", action: "suspend", icon: "../../assets/power/sleep.png" },
-        { name: "Reboot", action: "reboot", icon: "../../assets/power/restart.png" },
-        { name: "Logout", action: "logout", icon: "../../assets/power/logout.png" }
+        { name: "Lock", key: "L", action: "lock", icon: "../../assets/power/lock.png" },
+        { name: "Shutdown", key: "S", action: "shutdown", icon: "../../assets/power/power.png" },
+        { name: "Suspend", key: "U", action: "suspend", icon: "../../assets/power/sleep.png" },
+        { name: "Reboot", key: "R", action: "reboot", icon: "../../assets/power/restart.png" },
+        { name: "Logout", key: "E", action: "logout", icon: "../../assets/power/logout.png" }
     ]
 
     RowLayout {
@@ -42,7 +59,7 @@ FocusScope {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 54
                 activeFocusOnTab: true
-                Accessible.name: modelData.name
+                Accessible.name: modelData.name + " (" + modelData.key + ")"
 
                 background: Rectangle {
                     radius: Theme.Theme.radiusMedium
@@ -77,7 +94,7 @@ FocusScope {
                 }
 
                 ToolTip.visible: hovered
-                ToolTip.text: modelData.name
+                ToolTip.text: modelData.name + " (" + modelData.key + ")"
                 ToolTip.delay: 500
                 onClicked: root.actionRequested(modelData.action)
 

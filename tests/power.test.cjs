@@ -11,3 +11,14 @@ test('power actions use elogind and keep guarded suspend', () => {
     assert.match(locker, /\["loginctl", "suspend"\]/);
     assert.doesNotMatch(overlay + locker, /systemctl/);
 });
+
+test('power menu exposes unmodified keyboard shortcuts', () => {
+    const panel = fs.readFileSync('modules/bar/PowerPanel.qml', 'utf8');
+    for (const [key, action] of Object.entries({ L: 'lock', S: 'shutdown', U: 'suspend', R: 'reboot', E: 'logout' })) {
+        assert.match(panel, new RegExp(`\\[Qt\\.Key_${key}\\]: "${action}"`));
+        assert.match(panel, new RegExp(`key: "${key}", action: "${action}"`));
+    }
+    assert.match(panel, /event\.modifiers !== Qt\.NoModifier/);
+    assert.match(panel, /event\.isAutoRepeat/);
+    assert.match(panel, /actionRequested\(action\)/);
+});

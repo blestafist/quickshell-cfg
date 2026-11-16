@@ -17,14 +17,15 @@ FocusScope {
         if (event.isAutoRepeat || event.modifiers !== Qt.NoModifier)
             return
 
+        // Wayland reports XKB keycodes (evdev keycode + 8), independent of layout.
         const shortcuts = {
-            [Qt.Key_L]: "lock",
-            [Qt.Key_S]: "shutdown",
-            [Qt.Key_U]: "suspend",
-            [Qt.Key_R]: "reboot",
-            [Qt.Key_E]: "logout"
+            46: "lock",     // L / Д
+            39: "shutdown", // S / Ы
+            30: "suspend",  // U / Г
+            27: "reboot",   // R / К
+            26: "logout"    // E / У
         }
-        const action = shortcuts[event.key]
+        const action = shortcuts[event.nativeScanCode]
         if (action) {
             event.accepted = true
             actionRequested(action)

@@ -78,6 +78,7 @@ The active compositor configuration is `~/.config/niri/config.kdl`:
 
 - Startup runs `scripts/shellctl start`, avoiding duplicate shell instances.
 - `Super+R`: launcher; `Super+C`: clipboard; `Super+X`: calculator.
+- `Shift+F8`: исправить раскладку выделенного текста (`ghbdtn` ↔ `привет`). Для полей ввода с поддержкой PRIMARY, Ctrl+Insert (копировать) и Ctrl+V. Результат остаётся в буфере обмена. Требуются `wl-clipboard` и `wtype`.
 - `Super+S`: power menu; `Super+Alt+L`: independent QuickShell locker.
 - Niri's center-column action is on `Super+Alt+C`; directional navigation is unchanged.
 
@@ -86,6 +87,13 @@ updates and a three-second polling fallback. Clicking the layout indicator runs
 `niri msg action switch-layout next`. Configure available layouts in niri's
 `input.keyboard.xkb` section; a single configured layout cannot cycle to another.
 The power menu's logout action exits niri.
+
+To enable selection layout correction on a fresh install, add this line inside
+`binds` in `~/.config/niri/config.kdl`:
+
+```kdl
+Shift+F8 repeat=false hotkey-overlay-title="Исправить раскладку выделенного текста" { spawn-sh "python3 ~/.config/quickshell/scripts/fix-layout.py"; }
+```
 
 The locker continues to use `/etc/pam.d/hyprlock`; that PAM service is independent
 of the compositor. Keep the package installed. Migration does not verify live
